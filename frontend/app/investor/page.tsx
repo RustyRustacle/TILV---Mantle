@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { WalletGate } from '@/components/ui/WalletGate'
 import { Coins, Zap, ShieldAlert, ArrowUpRight } from 'lucide-react'
 
 export default function InvestorDashboard() {
@@ -37,6 +38,7 @@ export default function InvestorDashboard() {
     ]
 
     return (
+        <WalletGate>
         <div className="max-w-7xl mx-auto px-6 py-12">
             <div className="mb-12 flex flex-col md:flex-row justify-between md:items-end gap-6">
                 <div>
@@ -131,5 +133,6 @@ export default function InvestorDashboard() {
                 </Card>
             </div>
         </div>
+        </WalletGate>
     )
 }

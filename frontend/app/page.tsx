@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -284,9 +285,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="py-12 border-t border-white/10 text-center px-6 bg-[#030303] relative z-10">
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-mantle-dark flex items-center justify-center border border-mantle-green/30">
-            <span className="text-mantle-green font-bold text-sm">T</span>
-          </div>
+          <Image src="/logo.png" alt="TILV" width={32} height={32} className="rounded-lg" />
           <span className="font-extrabold text-2xl tracking-widest">TILV</span>
         </div>
         <p className="text-base text-gray-500 mb-8 max-w-md mx-auto font-light">Bring borderless on-chain liquidity to the real-world business economy.</p>

@@ -1,40 +1,22 @@
-'use client'
+import { getDefaultConfig } from '@rainbow-me/rainbowkit'
+import { defineChain } from 'viem'
 
-import { configureChains, createConfig } from 'wagmi'
-import { mantleTestnet } from 'wagmi/chains'
-import { publicProvider } from 'wagmi/providers/public'
-import { InjectedConnector } from 'wagmi/connectors/injected'
-import { WalletConnectConnector } from 'wagmi/connectors/walletConnect'
-
-// Configure Mantle chains
-const { chains, publicClient, webSocketPublicClient } = configureChains(
-  [mantleTestnet],
-  [publicProvider()]
-)
-
-// Configure connectors
-const connectors = [
-  new InjectedConnector({
-    chains,
-    options: {
-      shimDisconnect: true,
-    },
-  }),
-  new WalletConnectConnector({
-    chains,
-    options: {
-      projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '',
-      showQrModal: true,
-    },
-  }),
-]
-
-// Create wagmi config
-export const config = createConfig({
-  autoConnect: true,
-  connectors,
-  publicClient,
-  webSocketPublicClient,
+const mantleTestnet = defineChain({
+  id: 5003,
+  name: 'Mantle Testnet',
+  nativeCurrency: { name: 'MNT', symbol: 'MNT', decimals: 18 },
+  rpcUrls: {
+    default: { http: ['https://rpc.testnet.mantle.xyz'] },
+  },
+  blockExplorers: {
+    default: { name: 'MantleScan', url: 'https://explorer.testnet.mantle.xyz' },
+  },
+  testnet: true,
 })
 
-export { chains }
+export const config = getDefaultConfig({
+  appName: 'TILV',
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'YOUR_WALLETCONNECT_PROJECT_ID',
+  chains: [mantleTestnet],
+  ssr: true,
+})
