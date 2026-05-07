@@ -19,7 +19,7 @@
   "registrations": [
     {
       "agentId": null,
-      "agentRegistry": "eip155:5003:{IDENTITY_REGISTRY_ADDRESS}"
+      "agentRegistry": "eip155:5000:{IDENTITY_REGISTRY_ADDRESS}"
     }
   ],
   "supportedTrust": [

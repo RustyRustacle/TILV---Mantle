@@ -1,1 +1,14 @@
-node_modules
+node_modules/
+.env
+.env.local
+dist/
+.next/
+*.log
+coverage/
+cache/
+artifacts/
+typechain-types/
+uploads/
+logs/
+temp/
+deployment.json

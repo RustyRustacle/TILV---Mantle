@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # MongoDB Database
   mongodb:
     image: mongo:7
     container_name: tilv-mongodb
@@ -10,14 +9,13 @@ services:
     volumes:
       - mongodb_data:/data/db
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: tilv_admin_2024
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD required}
       MONGO_INITDB_DATABASE: tilv
     restart: unless-stopped
     networks:
       - tilv-network
 
-  # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: tilv-redis
@@ -25,12 +23,11 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
     restart: unless-stopped
     networks:
       - tilv-network
 
-  # AI Engine (Python FastAPI)
   ai-engine:
     build:
       context: ../ai-engine
@@ -40,13 +37,18 @@ services:
       - "5000:5000"
     environment:
       - PORT=5000
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+      - RPC_URL=${MANTLE_RPC_URL:-https://rpc.testnet.mantle.xyz}
+      - AGENT_PRIVATE_KEY=${AGENT_PRIVATE_KEY:-}
+      - AGENT_CONTROLLER=${AGENT_CONTROLLER:-}
+      - VALIDATION_REGISTRY=${VALIDATION_REGISTRY:-}
     volumes:
       - ../ai-engine:/app
     restart: unless-stopped
     networks:
       - tilv-network
 
-  # Backend API (Node.js/Express)
   backend:
     build:
       context: ../backend
@@ -59,12 +61,14 @@ services:
       - redis
       - ai-engine
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV:-development}
       - PORT=3001
-      - MONGODB_URI=mongodb://admin:tilv_admin_2024@mongodb:27017/tilv?authSource=admin
-      - REDIS_URL=redis://redis:6379
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD required}@mongodb:27017/tilv?authSource=admin
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379
       - AI_SERVICE_URL=http://ai-engine:5000
-      - CORS_ORIGIN=http://localhost:3000
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET required}
+      - MANTLE_RPC_URL=${MANTLE_RPC_URL:-https://rpc.testnet.mantle.xyz}
     volumes:
       - ../backend:/app
       - /app/node_modules
@@ -73,7 +77,6 @@ services:
     networks:
       - tilv-network
 
-  # Frontend (Next.js)
   frontend:
     build:
       context: ../frontend
@@ -84,14 +87,15 @@ services:
     depends_on:
       - backend
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:3001
-      - NEXT_PUBLIC_MANTLE_RPC=https://rpc.testnet.mantle.xyz
-      - NEXT_PUBLIC_MANTLE_CHAIN_ID=5001
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      - NEXT_PUBLIC_MANTLE_RPC=${MANTLE_RPC_URL:-https://rpc.testnet.mantle.xyz}
+      - NEXT_PUBLIC_MANTLE_CHAIN_ID=${MANTLE_CHAIN_ID:-5001}
+      - NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:?WALLETCONNECT_PROJECT_ID required}
+      - NEXT_PUBLIC_MAINNET=${NEXT_PUBLIC_MAINNET:-false}
     restart: unless-stopped
     networks:
       - tilv-network
 
-  # Mongo Express (Database UI)
   mongo-express:
     image: mongo-express:latest
     container_name: tilv-mongo-express
@@ -101,15 +105,16 @@ services:
       - mongodb
     environment:
       - ME_CONFIG_MONGODB_SERVER=mongodb
-      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
-      - ME_CONFIG_MONGODB_ADMINPASSWORD=tilv_admin_2024
-      - ME_CONFIG_BASICAUTH_USERNAME=admin
-      - ME_CONFIG_BASICAUTH_PASSWORD=admin123
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_ROOT_USER:-admin}
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD required}
+      - ME_CONFIG_BASICAUTH_USERNAME=${MONGO_EXPRESS_USER:-admin}
+      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASSWORD:?MONGO_EXPRESS_PASSWORD required}
     restart: unless-stopped
     networks:
       - tilv-network
+    profiles:
+      - dev
 
-  # Redis Commander (Cache UI)
   redis-commander:
     image: rediscommander/redis-commander:latest
     container_name: tilv-redis-commander
@@ -119,15 +124,17 @@ services:
       - redis
     environment:
       - REDIS_HOSTS=local:redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     restart: unless-stopped
     networks:
       - tilv-network
+    profiles:
+      - dev
 
 volumes:
   mongodb_data:
   redis_data:
   backend_uploads:
-
 
 networks:
   tilv-network:

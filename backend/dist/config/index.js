@@ -28,7 +28,13 @@ exports.default = {
     },
     // JWT configuration
     jwt: {
-        secret: process.env.JWT_SECRET || 'tilv-secret-change-in-production',
+        secret: (() => {
+            const secret = process.env.JWT_SECRET;
+            if (!secret || secret === 'tilv-secret-change-in-production') {
+                throw new Error('JWT_SECRET environment variable is required. Generate one with: openssl rand -hex 32');
+            }
+            return secret;
+        })(),
         expiresIn: process.env.JWT_EXPIRY || '7d'
     },
     // AI Service configuration

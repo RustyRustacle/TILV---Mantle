@@ -6,7 +6,7 @@ dotenv.config();
 
 const config: HardhatUserConfig = {
   solidity: {
-    version: "0.8.19",
+    version: "0.8.20",
     settings: {
       optimizer: {
         enabled: true,
@@ -28,8 +28,8 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: {
-      mantleTestnet: "abc", // No API key needed for Mantle
-      mantleMainnet: "abc",
+      mantleTestnet: process.env.MANTLE_TESTNET_API_KEY || "abc",
+      mantleMainnet: process.env.MANTLE_MAINNET_API_KEY || "abc",
     },
     customChains: [
       {
@@ -51,7 +51,7 @@ const config: HardhatUserConfig = {
     ]
   },
   paths: {
-    sources: "./contracts",
+    sources: "./src",
     tests: "./test",
     cache: "./cache",
     artifacts: "./artifacts"

@@ -1,0 +1,42 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: "Target network"
+        required: true
+        default: "mantleTestnet"
+        type: choice
+        options:
+          - mantleTestnet
+          - mantleMainnet
+
+jobs:
+  deploy-contracts:
+    name: Deploy Contracts
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    environment: ${{ inputs.network }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: "npm"
+          cache-dependency-path: contracts/package-lock.json
+      - run: npm ci
+      - run: npm run compile
+      - name: Deploy contracts
+        run: npx hardhat run scripts/deploy.ts --network ${{ inputs.network }}
+        env:
+          MANTLE_TESTNET_RPC: ${{ secrets.MANTLE_TESTNET_RPC }}
+          MANTLE_MAINNET_RPC: ${{ secrets.MANTLE_MAINNET_RPC }}
+          PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          USDT_ADDRESS: ${{ secrets.USDT_ADDRESS }}
+      - name: Verify contracts
+        run: |
+          echo "Run verification after deployment:"
+          echo "npx hardhat verify --network ${{ inputs.network }} <address>"

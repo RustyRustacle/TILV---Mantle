@@ -2,11 +2,6 @@
   "name": "tilv-mantle",
   "version": "1.0.0",
   "private": true,
-  "workspaces": [
-    "backend",
-    "oracle",
-    "compliance"
-  ],
   "scripts": {
     "install:all": "npm install && npm run install:contracts && npm run install:backend && npm run install:frontend",
     "install:contracts": "cd contracts && npm install",
@@ -19,7 +14,10 @@
     "test:contracts": "cd contracts && npm test",
     "test:backend": "cd backend && npm test",
     "build:all": "npm run build:contracts && npm run build:backend && npm run build:frontend",
-    "docker:up": "docker-compose -f docker/docker-compose.yml up -d",
+    "build:contracts": "cd contracts && npm run compile",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "docker:up": "docker-compose -f docker/docker-compose.yml --env-file docker/.env up -d",
     "docker:down": "docker-compose -f docker/docker-compose.yml down",
     "docker:logs": "docker-compose -f docker/docker-compose.yml logs -f"
   },

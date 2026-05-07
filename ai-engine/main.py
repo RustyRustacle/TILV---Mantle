@@ -10,10 +10,10 @@ from validation.invoice_validator import InvoiceValidator
 
 app = FastAPI(title="TILV AI Engine", version="1.0.0")
 
-# CORS
+cors_origin = os.getenv("CORS_ORIGIN", "http://localhost:3000")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[cors_origin],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

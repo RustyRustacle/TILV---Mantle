@@ -1,8 +1,9 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit'
 import { defineChain } from 'viem'
+import { mantle } from 'viem/chains'
 
 const mantleTestnet = defineChain({
-  id: 5003,
+  id: 5001,
   name: 'Mantle Testnet',
   nativeCurrency: { name: 'MNT', symbol: 'MNT', decimals: 18 },
   rpcUrls: {
@@ -14,9 +15,13 @@ const mantleTestnet = defineChain({
   testnet: true,
 })
 
+const chains = process.env.NEXT_PUBLIC_MAINNET === 'true'
+  ? [mantle]
+  : [mantleTestnet]
+
 export const config = getDefaultConfig({
   appName: 'TILV',
-  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'YOUR_WALLETCONNECT_PROJECT_ID',
-  chains: [mantleTestnet],
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '',
+  chains,
   ssr: true,
 })

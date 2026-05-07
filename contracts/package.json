@@ -8,30 +8,28 @@
         "deploy:testnet": "hardhat run scripts/deploy.ts --network mantleTestnet",
         "deploy:mainnet": "hardhat run scripts/deploy.ts --network mantleMainnet",
         "verify:testnet": "hardhat verify --network mantleTestnet",
+        "verify:mainnet": "hardhat verify --network mantleMainnet",
         "clean": "hardhat clean"
     },
     "devDependencies": {
-        "@nomicfoundation/hardhat-toolbox": "^3.0.0",
-        "@nomicfoundation/hardhat-ethers": "^3.0.0",
         "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+        "@nomicfoundation/hardhat-ethers": "^3.0.0",
         "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+        "@nomicfoundation/hardhat-toolbox": "^4.0.0",
         "@typechain/ethers-v6": "^0.5.0",
         "@typechain/hardhat": "^9.0.0",
         "@types/node": "^20.0.0",
         "hardhat": "^2.19.0",
         "typechain": "^8.3.0",
         "ethers": "^6.9.0",
-        "dotenv": "^16.3.1"
+        "dotenv": "^16.3.1",
+        "chai": "^4.3.0"
     },
     "dependencies": {
         "@openzeppelin/contracts": "^5.0.0"
     },
     "main": "index.js",
-    "directories": {
-        "test": "test"
-    },
     "keywords": [],
     "author": "",
-    "license": "ISC",
-    "type": "commonjs"
+    "license": "ISC"
 }
