@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(node -e \"const p=require\\('./node_modules/@rainbow-me/rainbowkit/package.json'\\); console.log\\('rainbowkit:', p.version\\)\")",
+      "Bash(node -e \"const p=require\\('./node_modules/wagmi/package.json'\\); console.log\\('wagmi:', p.version\\)\")",
+      "Bash(node -e \"const p=require\\('./node_modules/viem/package.json'\\); console.log\\('viem:', p.version\\)\")",
+      "Bash(node -e \"const p=require\\('./node_modules/@tanstack/react-query/package.json'\\); console.log\\('react-query:', p.version\\)\")",
+      "Bash(node -e \"const p=require\\('./node_modules/@rainbow-me/rainbowkit/package.json'\\); console.log\\(JSON.stringify\\(p.peerDependencies, null, 2\\)\\)\")",
+      "Bash(node -e \"console.log\\('wagmi:', require\\('./node_modules/wagmi/package.json'\\).version, 'viem:', require\\('./node_modules/viem/package.json'\\).version, 'rq:', require\\('./node_modules/@tanstack/react-query/package.json'\\).version\\)\")",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)"
+    ]
+  }
+}

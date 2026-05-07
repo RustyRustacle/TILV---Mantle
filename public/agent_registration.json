@@ -1,0 +1,39 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "TILV Yield Optimizer",
+  "description": "Autonomous AI agent that optimises liquidity allocation across TILV's three-tier invoice vault system (Prime / Growth / Emerging) on Mantle Network. Reads on-chain vault state every hour, computes risk-adjusted APY differentials, and rebalances capital to maximise yield for liquidity providers. All decisions are validated on-chain before execution and outcomes are recorded as reputation feedback.",
+  "image": "https://tilv-mantle.vercel.app/agent-icon.png",
+  "services": [
+    {
+      "name": "web",
+      "endpoint": "https://tilv-mantle.vercel.app/agent"
+    },
+    {
+      "name": "A2A",
+      "endpoint": "https://tilv-mantle.vercel.app/.well-known/agent-card.json",
+      "version": "0.3.0"
+    }
+  ],
+  "x402Support": false,
+  "active": true,
+  "registrations": [
+    {
+      "agentId": null,
+      "agentRegistry": "eip155:5003:{IDENTITY_REGISTRY_ADDRESS}"
+    }
+  ],
+  "supportedTrust": [
+    "reputation",
+    "crypto-economic"
+  ],
+  "tilv": {
+    "vaultTiers": ["Prime", "Growth", "Emerging"],
+    "strategy": "risk_adjusted_apy_optimisation",
+    "rebalanceFrequency": "hourly",
+    "safetyParams": {
+      "maxRebalancePct": 20,
+      "cooldownHours": 6,
+      "validationThreshold": 70
+    }
+  }
+}
