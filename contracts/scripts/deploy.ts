@@ -1,4 +1,4 @@
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 
 async function main() {
   const network = process.env.HARDHAT_NETWORK || "mantleTestnet";
@@ -28,7 +28,7 @@ async function main() {
 
   // 3. Deploy VaultManager
   const USDT_ADDRESS = isMainnet
-    ? (process.env.USDT_MAINNET_ADDRESS || "")
+    ? (process.env.USDT_MAINNET_ADDRESS || "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE")
     : (process.env.USDT_ADDRESS || "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE");
 
   console.log("\nDeploying VaultManager...");
