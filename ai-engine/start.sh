@@ -22,6 +22,11 @@ if [ ! -f ".env" ]; then
     echo "📝 Please edit .env with your configuration"
 fi
 
+# Start yield optimizer in background
+echo "🤖 Starting Yield Optimizer..."
+nohup python yield_optimizer.py > yield_optimizer.log 2>&1 &
+echo $! > yield_optimizer.pid
+
 # Start the server
 echo "🌐 Starting FastAPI server on port 5000..."
 python main.py

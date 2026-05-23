@@ -31,6 +31,7 @@ import time
 import json
 import hashlib
 import logging
+import base64
 import schedule
 from dataclasses import dataclass
 from typing import Optional
@@ -52,6 +53,7 @@ PRIVATE_KEY         = os.getenv("AGENT_PRIVATE_KEY")
 AGENT_CONTROLLER    = os.getenv("AGENT_CONTROLLER")
 POLL_INTERVAL       = int(os.getenv("POLL_INTERVAL", 3600))
 MIN_YIELD_DELTA_BPS = int(os.getenv("MIN_YIELD_DELTA_BPS", 50))
+VALIDATION_THRESHOLD = int(os.getenv("VALIDATION_THRESHOLD", 70))
 
 # Vault tier constants (mirror Solidity enum)
 PRIME    = 0   # risk 0-30,  4-6%  APY,  80% advance
@@ -75,19 +77,20 @@ AGENT_CONTROLLER_ABI = json.loads("""
       {"name": "riskScores",    "type": "uint256[3]"}
     ]
   },
-  {
-    "name": "submitProposal",
-    "type": "function",
-    "stateMutability": "nonpayable",
-    "inputs": [
-      {"name": "fromTier",    "type": "uint8"},
-      {"name": "toTier",      "type": "uint8"},
-      {"name": "amount",      "type": "uint256"},
-      {"name": "requestURI",  "type": "string"},
-      {"name": "requestHash", "type": "bytes32"}
-    ],
-    "outputs": []
-  },
+    {
+        "name": "submitProposal",
+        "type": "function",
+        "stateMutability": "nonpayable",
+        "inputs": [
+            {"name": "fromTier",    "type": "uint8"},
+            {"name": "toTier",      "type": "uint8"},
+            {"name": "amount",      "type": "uint256"},
+            {"name": "nonce",       "type": "uint256"},
+            {"name": "requestURI",  "type": "string"},
+            {"name": "requestHash", "type": "bytes32"}
+        ],
+        "outputs": []
+    },
   {
     "name": "executeProposal",
     "type": "function",
@@ -202,9 +205,10 @@ class RebalanceProposal:
 
 # ── Web3 setup ─────────────────────────────────────────────────
 def build_w3() -> Web3:
-    w3 = Web3(Web3.HTTPProvider(RPC_URL))
+    w3 = Web3(Web3.HTTPProvider(RPC_URL, request_kwargs={"timeout": 60}))
     w3.middleware_onion.inject(geth_poa_middleware, layer=0)
-    assert w3.is_connected(), "Cannot connect to RPC"
+    if not w3.is_connected():
+        raise ConnectionError("Cannot connect to RPC")
     return w3
 
 def build_contracts(w3: Web3):
@@ -302,28 +306,47 @@ def find_best_rebalance(states: list[VaultState]) -> Optional[RebalanceProposal]
 
 
 # ── Request hash builder ───────────────────────────────────────
+_nonce_counter = 0
+
 def make_request_hash(w3: Web3, from_tier: int, to_tier: int,
-                      amount: int, block_number: int) -> bytes:
+                      amount: int, sender: str) -> tuple[bytes, int]:
+    global _nonce_counter
+    _nonce_counter += 1
     encoded = w3.codec.encode(
-        ["uint8", "uint8", "uint256", "uint256"],
-        [from_tier, to_tier, amount, block_number]
+        ["uint8", "uint8", "uint256", "uint256", "address"],
+        [from_tier, to_tier, amount, _nonce_counter, sender]
     )
-    return w3.keccak(encoded)
+    return w3.keccak(encoded), _nonce_counter
 
 
 # ── Transaction sender ─────────────────────────────────────────
-def send_tx(w3: Web3, account, contract_fn, gas: int = 300_000) -> str:
-    tx = contract_fn.build_transaction({
-        "from":  account.address,
-        "nonce": w3.eth.get_transaction_count(account.address),
-        "gas":   gas,
-        "gasPrice": w3.eth.gas_price,
-    })
-    signed = account.sign_transaction(tx)
-    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
-    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
-    assert receipt["status"] == 1, f"Tx failed: {tx_hash.hex()}"
-    return tx_hash.hex()
+MAX_RETRIES = 3
+RETRY_DELAY_S = 5
+
+def send_tx(w3: Web3, account, contract_fn) -> str:
+    last_exc = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            tx = contract_fn.build_transaction({
+                "from":    account.address,
+                "nonce":   w3.eth.get_transaction_count(account.address, "pending"),
+                "gas":     w3.eth.estimate_gas(contract_fn.build_transaction({
+                    "from": account.address
+                })),
+                "gasPrice": w3.eth.gas_price,
+            })
+            signed = account.sign_transaction(tx)
+            tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
+            receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+            if receipt["status"] != 1:
+                raise RuntimeError(f"Tx reverted: {tx_hash.hex()}")
+            return tx_hash.hex()
+        except Exception as e:
+            log.warning(f"send_tx attempt {attempt}/{MAX_RETRIES} failed: {e}")
+            last_exc = e
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_DELAY_S * attempt)
+    raise RuntimeError(f"send_tx failed after {MAX_RETRIES} attempts") from last_exc
 
 
 # ── Validation poller ──────────────────────────────────────────
@@ -344,8 +367,8 @@ def wait_for_validation(validation, request_hash: bytes,
             (_, _, response, _, _, last_update) = \
                 validation.functions.getValidationStatus(request_hash).call()
             if last_update > 0:
-                log.info(f"Validation response: {response}/100")
-                return response >= 70
+                log.info(f"Validation response: {response}/100 (threshold: {VALIDATION_THRESHOLD})")
+                return response >= VALIDATION_THRESHOLD
         except Exception as e:
             log.debug(f"Validation poll error (will retry): {e}")
         time.sleep(poll_s)
@@ -389,10 +412,9 @@ def optimisation_cycle(w3: Web3, controller, validation, account):
 
     log.info(f"Proposal: {proposal.rationale}")
 
-    # Build request hash
-    block_num    = w3.eth.block_number
-    request_hash = make_request_hash(
-        w3, proposal.from_tier, proposal.to_tier, proposal.amount, block_num
+    # Build request hash with nonce (avoids block.number race)
+    request_hash, nonce = make_request_hash(
+        w3, proposal.from_tier, proposal.to_tier, proposal.amount, account.address
     )
 
     # Build a lightweight off-chain reasoning JSON
@@ -400,7 +422,7 @@ def optimisation_cycle(w3: Web3, controller, validation, account):
     reasoning = {
         "type":    "https://eips.ethereum.org/EIPS/eip-8004#validation-v1",
         "agentId": "tilv-yield-optimizer-v1",
-        "block":   block_num,
+        "nonce":   nonce,
         "proposal": {
             "fromTier":       proposal.from_tier,
             "toTier":         proposal.to_tier,
@@ -420,7 +442,7 @@ def optimisation_cycle(w3: Web3, controller, validation, account):
         ]
     }
     request_uri = "data:application/json;base64," + \
-        __import__("base64").b64encode(
+        base64.b64encode(
             json.dumps(reasoning).encode()
         ).decode()
 
@@ -430,6 +452,7 @@ def optimisation_cycle(w3: Web3, controller, validation, account):
         proposal.from_tier,
         proposal.to_tier,
         proposal.amount,
+        nonce,
         request_uri,
         request_hash
     )
@@ -451,7 +474,7 @@ def optimisation_cycle(w3: Web3, controller, validation, account):
     # Execute proposal
     log.info("Executing validated proposal…")
     exec_fn  = controller.functions.executeProposal(request_hash)
-    exec_tx  = send_tx(w3, account, exec_fn, gas=400_000)
+    exec_tx  = send_tx(w3, account, exec_fn)
     log.info(f"Proposal executed: {exec_tx}")
 
     # Fetch updated vault states for logging
@@ -467,10 +490,15 @@ def optimisation_cycle(w3: Web3, controller, validation, account):
 
 # ── Entry point ────────────────────────────────────────────────
 def main():
-    assert PRIVATE_KEY,      "AGENT_PRIVATE_KEY not set in .env"
-    assert AGENT_CONTROLLER, "AGENT_CONTROLLER not set in .env"
+    if not PRIVATE_KEY:
+        raise ValueError("AGENT_PRIVATE_KEY not set in .env")
+    if not AGENT_CONTROLLER:
+        raise ValueError("AGENT_CONTROLLER not set in .env")
 
     w3           = build_w3()
+    # NOTE: Private key stays in memory for the process lifetime.
+    # For production, use an external signer or keystore pattern:
+    #   w3.eth.account.load("keystore.json", "password")
     account      = w3.eth.account.from_key(PRIVATE_KEY)
     controller, validation = build_contracts(w3)
 

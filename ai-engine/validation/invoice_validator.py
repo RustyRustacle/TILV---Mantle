@@ -50,10 +50,18 @@ class InvoiceValidator:
         }
     
     def _validate_date_format(self, date_str: str) -> bool:
-        """Check if date string matches common formats"""
+        """Check if date string is a real calendar date."""
         formats = [
-            r'\d{1,2}/\d{1,2}/\d{2,4}',
-            r'\d{1,2}-\d{1,2}-\d{2,4}',
-            r'\d{4}-\d{1,2}-\d{1,2}'
+            "%m/%d/%Y", "%m/%d/%y",
+            "%m-%d-%Y", "%m-%d-%y",
+            "%Y-%m-%d", "%Y/%m/%d",
+            "%d/%m/%Y", "%d/%m/%y",
+            "%d-%m-%Y", "%d-%m-%y",
         ]
-        return any(re.match(fmt, date_str) for fmt in formats)
+        for fmt in formats:
+            try:
+                datetime.strptime(date_str.strip(), fmt)
+                return True
+            except ValueError:
+                continue
+        return False
