@@ -7,8 +7,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "./InvoiceNFT.sol";
+import "./EmergencyPause.sol";
 
-contract VaultManager is Ownable, ReentrancyGuard, AccessControl {
+contract VaultManager is EmergencyPause, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     bytes32 public constant AGENT_ROLE = keccak256("AGENT_ROLE");
@@ -48,8 +49,6 @@ contract VaultManager is Ownable, ReentrancyGuard, AccessControl {
     uint256 public constant BASIS_POINTS = 10000;
     uint256 public constant PLATFORM_FEE = 200;
 
-    bool public paused;
-
     event VaultDeposit(address indexed investor, VaultTier tier, uint256 amount, uint256 shares);
     event VaultWithdrawal(address indexed investor, VaultTier tier, uint256 amount, uint256 shares);
     event InvoiceFunded(uint256 indexed invoiceId, VaultTier tier, uint256 amount);
@@ -64,7 +63,7 @@ contract VaultManager is Ownable, ReentrancyGuard, AccessControl {
         _;
     }
 
-    constructor(address _stablecoin, address _invoiceNFT) Ownable(msg.sender) {
+    constructor(address _stablecoin, address _invoiceNFT) {
         require(_stablecoin != address(0), "Invalid stablecoin address");
         require(_invoiceNFT != address(0), "Invalid invoiceNFT address");
 
@@ -72,6 +71,9 @@ contract VaultManager is Ownable, ReentrancyGuard, AccessControl {
         invoiceNFT = InvoiceNFT(_invoiceNFT);
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(PAUSER_ROLE, msg.sender);
+        _grantRole(UNPAUSER_ROLE, msg.sender);
+        _grantRole(EMERGENCY_ADMIN_ROLE, msg.sender);
 
         vaults[VaultTier.PRIME] = Vault({
             tier: VaultTier.PRIME,
@@ -107,7 +109,7 @@ contract VaultManager is Ownable, ReentrancyGuard, AccessControl {
         });
     }
 
-    function deposit(VaultTier tier, uint256 amount) external nonReentrant notPaused {
+    function deposit(VaultTier tier, uint256 amount) external nonReentrant whenNotPaused whenNotShutdown {
         Vault storage vault = vaults[tier];
         require(vault.isActive, "Vault is not active");
         require(amount >= vault.minDeposit, "Amount below minimum deposit");
@@ -135,7 +137,7 @@ contract VaultManager is Ownable, ReentrancyGuard, AccessControl {
         emit VaultDeposit(msg.sender, tier, amount, shares);
     }
 
-    function withdraw(VaultTier tier, uint256 shares) external nonReentrant notPaused {
+    function withdraw(VaultTier tier, uint256 shares) external nonReentrant whenNotPaused whenNotShutdown {
         Vault storage vault = vaults[tier];
         InvestorPosition storage position = positions[tier][msg.sender];
 
@@ -160,7 +162,7 @@ contract VaultManager is Ownable, ReentrancyGuard, AccessControl {
         emit VaultWithdrawal(msg.sender, tier, withdrawAmount, shares);
     }
 
-    function fundInvoice(uint256 invoiceId) external onlyOwner nonReentrant notPaused {
+    function fundInvoice(uint256 invoiceId) external onlyOwner nonReentrant whenNotPaused whenNotShutdown {
         InvoiceNFT.Invoice memory invoice = invoiceNFT.getInvoice(invoiceId);
 
         require(
@@ -196,7 +198,8 @@ contract VaultManager is Ownable, ReentrancyGuard, AccessControl {
         external
         onlyOwner
         nonReentrant
-        notPaused
+        whenNotPaused
+        whenNotShutdown
     {
         InvoiceNFT.Invoice memory invoice = invoiceNFT.getInvoice(invoiceId);
         require(
@@ -233,7 +236,8 @@ contract VaultManager is Ownable, ReentrancyGuard, AccessControl {
         external
         onlyOwner
         nonReentrant
-        notPaused
+        whenNotPaused
+        whenNotShutdown
     {
         InvoiceNFT.Invoice memory invoice = invoiceNFT.getInvoice(invoiceId);
         require(
@@ -255,7 +259,8 @@ contract VaultManager is Ownable, ReentrancyGuard, AccessControl {
         external
         onlyRole(AGENT_ROLE)
         nonReentrant
-        notPaused
+        whenNotPaused
+        whenNotShutdown
     {
         require(fromTier < 3 && toTier < 3, "VM: invalid tier");
         require(fromTier != toTier, "VM: same tier");
@@ -359,14 +364,16 @@ contract VaultManager is Ownable, ReentrancyGuard, AccessControl {
         vaults[tier].isActive = active;
     }
 
-    function pause() external onlyOwner {
-        paused = true;
+    function triggerEmergencyShutdown(string calldata reason) external onlyRole(EMERGENCY_ADMIN_ROLE) {
+        // This will call the one from EmergencyPause
+        super.triggerEmergencyShutdown(reason);
         emit EmergencyPause(msg.sender);
     }
 
-    function unpause() external onlyOwner {
-        paused = false;
-        emit EmergencyUnpause(msg.sender);
+    function initiateGracefulShutdown() external onlyRole(EMERGENCY_ADMIN_ROLE) {
+        super.initiateGracefulShutdown();
+        // Additional graceful logic if needed
+        emit GracefulShutdownComplete(msg.sender);
     }
 
     function supportsInterface(bytes4 interfaceId)
