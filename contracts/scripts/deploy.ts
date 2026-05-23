@@ -1,4 +1,4 @@
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 
 async function main() {
   console.log("🚀 Deploying TILV Contracts to Mantle Network...\n");
@@ -24,7 +24,7 @@ async function main() {
   console.log("✅ RiskEngine deployed to:", riskEngineAddress);
 
   // 3. Deploy VaultManager
-  // Mantle Testnet USDT address (or use your deployed USDT)
+  // Mantle USDT address. Override with USDT_ADDRESS if needed.
   const USDT_ADDRESS = process.env.USDT_ADDRESS || "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE";
 
   console.log("\n💰 Deploying VaultManager...");
@@ -50,7 +50,7 @@ async function main() {
 
   // 5. Save deployment addresses
   const deploymentInfo = {
-    network: "mantleTestnet",
+    network: network.name,
     deployedAt: new Date().toISOString(),
     contracts: {
       invoiceNFT: invoiceNFTAddress,
