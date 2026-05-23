@@ -4,8 +4,8 @@ services:
   mongodb:
     image: mongo:7
     container_name: tilv-mongodb
-    ports:
-      - "27017:27017"
+    # ports:  # Uncomment only for local dev; remove for production
+    #   - "27017:27017"
     volumes:
       - mongodb_data:/data/db
     environment:
@@ -19,8 +19,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: tilv-redis
-    ports:
-      - "6379:6379"
+    # ports:  # Uncomment only for local dev; remove for production
+    #   - "6379:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
@@ -44,7 +44,7 @@ services:
       - AGENT_CONTROLLER=${AGENT_CONTROLLER:-}
       - VALIDATION_REGISTRY=${VALIDATION_REGISTRY:-}
     volumes:
-      - ../ai-engine:/app
+      - ../ai-engine:/app:ro
     restart: unless-stopped
     networks:
       - tilv-network
@@ -70,7 +70,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET required}
       - MANTLE_RPC_URL=${MANTLE_RPC_URL:-https://rpc.testnet.mantle.xyz}
     volumes:
-      - ../backend:/app
+      - ../backend:/app:ro
       - /app/node_modules
       - backend_uploads:/app/uploads
     restart: unless-stopped
