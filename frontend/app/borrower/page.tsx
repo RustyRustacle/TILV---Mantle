@@ -6,9 +6,17 @@ import { Button } from '@/components/ui/Button'
 import { WalletGate } from '@/components/ui/WalletGate'
 import { Upload, FileText, CheckCircle, AlertCircle, X } from 'lucide-react'
 import React, { useRef, useState, DragEvent, ChangeEvent } from 'react'
+import { useSignMessage, useAccount } from 'wagmi'
 import axios from 'axios'
 
-const AI_ENGINE_URL = process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:5000'
+function getBackendUrl(): string {
+  const url = process.env.NEXT_PUBLIC_API_URL
+  if (!url && typeof window !== 'undefined') {
+    console.warn('NEXT_PUBLIC_API_URL is not set')
+  }
+  return url ?? ''
+}
+const BACKEND_URL = getBackendUrl()
 const MAX_FILE_SIZE_MB = 10
 const ACCEPTED_TYPES = ['application/pdf', 'image/png', 'image/jpeg']
 const ACCEPTED_EXTS = '.pdf,.png,.jpg,.jpeg'
@@ -41,6 +49,23 @@ export default function BorrowerDashboard() {
     const [isLoading, setIsLoading] = useState(false)
     const [result, setResult] = useState<UploadResponse | null>(null)
     const [error, setError] = useState<string | null>(null)
+    const [amountError, setAmountError] = useState<string | null>(null)
+    const { address } = useAccount()
+    const { signMessageAsync } = useSignMessage()
+
+    function validateAmount(val: string): string | null {
+        if (!val) return null
+        const num = Number(val.replace(/,/g, ''))
+        if (isNaN(num) || num <= 0) return 'Enter a valid positive number'
+        if (num > 1_000_000_000) return 'Amount exceeds maximum ($1B)'
+        return null
+    }
+
+    function handleAmountChange(e: ChangeEvent<HTMLInputElement>) {
+        const val = e.target.value.replace(/[^0-9,]/g, '')
+        setAmount(val)
+        setAmountError(validateAmount(val))
+    }
 
     function validateFile(f: File): string | null {
         if (!ACCEPTED_TYPES.includes(f.type)) {
@@ -83,16 +108,30 @@ export default function BorrowerDashboard() {
 
     async function handleSubmit() {
         if (!file) { setError('Please select an invoice file before submitting.'); return }
+        if (!address) { setError('Wallet not connected.'); return }
+        const amtErr = validateAmount(amount)
+        if (amtErr) { setAmountError(amtErr); return }
         setIsLoading(true)
         setError(null)
         setResult(null)
         try {
+            const message = `TILV-Invoice-Upload-${address.toLowerCase()}-${Date.now()}`
+            const signature = await signMessageAsync({ message })
             const formData = new FormData()
             formData.append('file', file)
+            if (amount) formData.append('amount', amount.replace(/,/g, ''))
+            formData.append('dueDays', dueDays)
             const { data } = await axios.post<UploadResponse>(
-                `${AI_ENGINE_URL}/process-invoice`,
+                `${BACKEND_URL}/api/v1/process-invoice`,
                 formData,
-                { headers: { 'Content-Type': 'multipart/form-data' } }
+                {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                        'X-Wallet-Address': address,
+                        'X-Wallet-Signature': signature,
+                        'X-Signed-Message': message,
+                    },
+                }
             )
             setResult(data)
         } catch (err: unknown) {
@@ -132,6 +171,10 @@ export default function BorrowerDashboard() {
                                 onDragOver={onDragOver}
                                 onDragLeave={onDragLeave}
                                 onClick={() => fileInputRef.current?.click()}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click() }}
+                                aria-label="Upload invoice file"
                                 className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-center transition-colors cursor-pointer bg-white/5 ${
                                     dragging
                                         ? 'border-mantle-green/70 bg-mantle-green/5'
@@ -161,25 +204,31 @@ export default function BorrowerDashboard() {
                                 <div className="mt-4 flex items-start gap-3 p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
                                     <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                                     <span>{error}</span>
-                                    <button onClick={() => setError(null)} className="ml-auto shrink-0"><X className="w-4 h-4" /></button>
+                                    <button onClick={() => setError(null)} className="ml-auto shrink-0" aria-label="Dismiss error"><X className="w-4 h-4" /></button>
                                 </div>
                             )}
 
                             <div className="mt-6 flex flex-col gap-4">
                                 <div className="grid md:grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <label className="text-sm text-gray-400">Invoice Amount (USD)</label>
+                                        <label htmlFor="invoice-amount" className="text-sm text-gray-400">Invoice Amount (USD)</label>
                                         <input
+                                            id="invoice-amount"
                                             type="text"
+                                            inputMode="numeric"
                                             placeholder="Example: 50,000"
                                             value={amount}
-                                            onChange={(e) => setAmount(e.target.value)}
+                                            onChange={handleAmountChange}
+                                            aria-invalid={!!amountError}
+                                            aria-describedby={amountError ? 'amount-error' : undefined}
                                             className="w-full bg-mantle-darker border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-mantle-green focus:ring-1 focus:ring-mantle-green/50"
                                         />
+                                        {amountError && <p id="amount-error" className="text-xs text-red-400">{amountError}</p>}
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-sm text-gray-400">Due Date (Days)</label>
+                                        <label htmlFor="due-days" className="text-sm text-gray-400">Due Date (Days)</label>
                                         <select
+                                            id="due-days"
                                             value={dueDays}
                                             onChange={(e) => setDueDays(e.target.value)}
                                             className="w-full bg-mantle-darker border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-mantle-green focus:ring-1 focus:ring-mantle-green/50"

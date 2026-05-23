@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { ShieldCheck, Zap, Coins, ArrowRight, BarChart3, Clock, Wallet, ChevronRight, Activity, Cpu } from 'lucide-react'
+import { ShieldCheck, Zap, Coins, ArrowRight, Wallet, ChevronRight, Activity, Cpu } from 'lucide-react'
 import { useRef } from 'react'
 
 export default function Home() {

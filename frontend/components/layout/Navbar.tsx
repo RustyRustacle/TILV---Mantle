@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
 
 export function Navbar() {
@@ -16,14 +15,12 @@ export function Navbar() {
     }, [])
 
     return (
-        <motion.nav
-            initial={{ y: -100 }}
-            animate={{ y: 0 }}
-            transition={{ type: 'spring', stiffness: 100, damping: 20 }}
-            className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
-                ? 'bg-mantle-darker/80 backdrop-blur-lg border-b border-white/5 py-4'
-                : 'bg-transparent py-6'
-                }`}
+        <nav
+            className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+                scrolled
+                    ? 'bg-mantle-darker/80 backdrop-blur-lg border-b border-white/5 py-4'
+                    : 'bg-transparent py-6'
+            }`}
         >
             <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
                 <Link href="/" className="flex items-center gap-1 group">
@@ -48,6 +45,6 @@ export function Navbar() {
                     <ConnectButton />
                 </div>
             </div>
-        </motion.nav>
+        </nav>
     )
 }

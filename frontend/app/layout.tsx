@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
 import { Space_Grotesk } from 'next/font/google'
 import './globals.css'
-import { Providers } from './providers'
+import dynamic from 'next/dynamic'
 import { Navbar } from '@/components/layout/Navbar'
 
 const spaceGrotesk = Space_Grotesk({ subsets: ['latin'] })
+
+const Providers = dynamic(() => import('./providers').then((m) => ({ default: m.Providers })), { ssr: false })
 
 export const metadata: Metadata = {
   title: 'TILV - Tokenized Invoice Liquidity Vault',

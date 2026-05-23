@@ -11,7 +11,17 @@ export function WalletGate({ children }: { children: ReactNode }) {
 
     useEffect(() => { setMounted(true) }, [])
 
-    if (!mounted || status === 'reconnecting') return null
+    if (!mounted || status === 'reconnecting') {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="animate-pulse flex flex-col items-center gap-4">
+                    <div className="w-20 h-20 rounded-full bg-mantle-light/50" />
+                    <div className="h-4 w-48 bg-mantle-light/50 rounded" />
+                    <div className="h-3 w-32 bg-mantle-light/50 rounded" />
+                </div>
+            </div>
+        )
+    }
 
     if (!isConnected) {
         return (

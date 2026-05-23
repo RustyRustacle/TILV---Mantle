@@ -1,20 +1,15 @@
 import { HTMLAttributes, forwardRef } from 'react'
-import { motion, HTMLMotionProps } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
-export interface CardProps extends Omit<HTMLMotionProps<"div">, "ref"> { }
+export interface CardProps extends HTMLAttributes<HTMLDivElement> { }
 
 export const Card = forwardRef<HTMLDivElement, CardProps>(
     ({ className, ...props }, ref) => {
         return (
-            <motion.div
+            <div
                 ref={ref}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5 }}
                 className={cn(
-                    "rounded-2xl border border-white/5 bg-mantle-darker/60 backdrop-blur-xl p-6 shadow-xl",
+                    "rounded-2xl border border-white/5 bg-mantle-darker/60 backdrop-blur-xl p-6 shadow-xl transition-all duration-500 opacity-0 translate-y-5 animate-fade-in",
                     className
                 )}
                 {...props}

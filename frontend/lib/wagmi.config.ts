@@ -1,4 +1,4 @@
-import { getDefaultConfig } from '@rainbow-me/rainbowkit'
+import { getDefaultConfig, type Chain } from '@rainbow-me/rainbowkit'
 import { defineChain } from 'viem'
 import { mantle } from 'viem/chains'
 
@@ -15,13 +15,22 @@ const mantleTestnet = defineChain({
   testnet: true,
 })
 
-const chains = process.env.NEXT_PUBLIC_MAINNET === 'true'
-  ? [mantle]
-  : [mantleTestnet]
+const chains: [Chain, ...Chain[]] = process.env.NEXT_PUBLIC_MAINNET === 'true'
+  ? [mantle as Chain]
+  : [mantleTestnet as Chain]
+
+function getProjectId(): string {
+  const id = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+  if (!id && typeof window !== 'undefined') {
+    console.warn('NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set')
+    return ''
+  }
+  return id ?? ''
+}
 
 export const config = getDefaultConfig({
   appName: 'TILV',
-  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '',
+  projectId: getProjectId(),
   chains,
   ssr: true,
 })
