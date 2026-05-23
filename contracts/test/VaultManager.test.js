@@ -84,21 +84,21 @@ describe("VaultManager", function () {
       const amount = ethers.parseUnits("100", USDT_DECIMALS);
       await expect(
         vaultManager.connect(investor).deposit(0, amount)
-      ).to.be.revertedWith("Amount below minimum deposit");
+      ).to.be.revertedWith("VM: below minimum deposit");
     });
 
     it("should reject deposits to inactive vault", async function () {
       await vaultManager.connect(owner).setVaultActive(0, false);
       await expect(
         vaultManager.connect(investor).deposit(0, ethers.parseUnits("1000", USDT_DECIMALS))
-      ).to.be.revertedWith("Vault is not active");
+      ).to.be.revertedWith("VM: vault not active");
     });
 
     it("should reject deposits when paused", async function () {
       await vaultManager.connect(owner).pause();
       await expect(
         vaultManager.connect(investor).deposit(0, ethers.parseUnits("1000", USDT_DECIMALS))
-      ).to.be.revertedWith("VM: paused");
+      ).to.be.revertedWith("Pausable: paused");
     });
   });
 
@@ -110,7 +110,7 @@ describe("VaultManager", function () {
     it("should allow partial withdrawal", async function () {
       const withdrawShares = ethers.parseUnits("1000", USDT_DECIMALS);
       const balanceBefore = await stablecoin.balanceOf(investor.address);
-      await vaultManager.connect(investor).withdraw(0, withdrawShares);
+      await vaultManager.connect(investor).withdraw(0, withdrawShares, 0);
       const balanceAfter = await stablecoin.balanceOf(investor.address);
 
       expect(balanceAfter).to.be.gt(balanceBefore);
@@ -121,7 +121,7 @@ describe("VaultManager", function () {
     it("should allow full withdrawal", async function () {
       const position = await vaultManager.getPosition(0, investor.address);
       const balanceBefore = await stablecoin.balanceOf(investor.address);
-      await vaultManager.connect(investor).withdraw(0, position.shares);
+      await vaultManager.connect(investor).withdraw(0, position.shares, 0);
       const balanceAfter = await stablecoin.balanceOf(investor.address);
 
       expect(balanceAfter).to.be.gt(balanceBefore);
@@ -132,15 +132,15 @@ describe("VaultManager", function () {
 
     it("should reject withdrawal with insufficient shares", async function () {
       await expect(
-        vaultManager.connect(investor).withdraw(0, ethers.parseUnits("9999", USDT_DECIMALS))
-      ).to.be.revertedWith("Insufficient shares");
+        vaultManager.connect(investor).withdraw(0, ethers.parseUnits("9999", USDT_DECIMALS), 0)
+      ).to.be.revertedWith("VM: insufficient shares");
     });
 
     it("should reject withdrawal when paused", async function () {
       await vaultManager.connect(owner).pause();
       await expect(
-        vaultManager.connect(investor).withdraw(0, ethers.parseUnits("1000", USDT_DECIMALS))
-      ).to.be.revertedWith("VM: paused");
+        vaultManager.connect(investor).withdraw(0, ethers.parseUnits("1000", USDT_DECIMALS), 0)
+      ).to.be.revertedWith("Pausable: paused");
     });
   });
 
@@ -156,7 +156,7 @@ describe("VaultManager", function () {
       const fromVault = await vaultManager.vaults(0);
       const toVault = await vaultManager.vaults(1);
 
-      expect(fromVault.totalAllocated).to.equal(amount);
+      expect(fromVault.totalDeposits).to.equal(ethers.parseUnits("9000", USDT_DECIMALS));
       expect(toVault.totalDeposits).to.equal(amount);
     });
 
@@ -170,7 +170,7 @@ describe("VaultManager", function () {
       await vaultManager.connect(owner).pause();
       await expect(
         vaultManager.connect(agent).rebalance(0, 1, ethers.parseUnits("1000", USDT_DECIMALS))
-      ).to.be.revertedWith("VM: paused");
+      ).to.be.revertedWith("Pausable: paused");
     });
 
     it("should reject rebalance exceeding available liquidity", async function () {
@@ -222,7 +222,7 @@ describe("VaultManager", function () {
 
     it("should emit event on pause", async function () {
       await expect(vaultManager.connect(owner).pause())
-        .to.emit(vaultManager, "EmergencyPause");
+        .to.emit(vaultManager, "Paused");
     });
   });
 });

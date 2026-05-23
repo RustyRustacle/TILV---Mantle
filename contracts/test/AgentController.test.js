@@ -112,16 +112,16 @@ describe("AgentController", function () {
       const fromTier = 0;
       const toTier = 1;
       const amount = ethers.parseUnits("1000", 6);
-      const blockNum = await ethers.provider.getBlockNumber();
+      const nonce = 1;
       const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint8", "uint8", "uint256", "uint256"],
-        [fromTier, toTier, amount, blockNum]
+        ["uint8", "uint8", "uint256", "uint256", "address"],
+        [fromTier, toTier, amount, nonce, agentSigner.address]
       );
       const requestHash = ethers.keccak256(encoded);
 
       await expect(
         agentController.connect(agentSigner).submitProposal(
-          fromTier, toTier, amount, "data:reasoning", requestHash
+          fromTier, toTier, amount, nonce, "data:reasoning", requestHash
         )
       ).to.emit(agentController, "ProposalSubmitted");
     });
@@ -130,7 +130,7 @@ describe("AgentController", function () {
       const requestHash = ethers.randomBytes(32);
       await expect(
         agentController.connect(user).submitProposal(
-          0, 1, ethers.parseUnits("1000", 6), "data:reasoning", requestHash
+          0, 1, ethers.parseUnits("1000", 6), 1, "data:reasoning", requestHash
         )
       ).to.be.revertedWith("AC: not agent signer");
     });
@@ -139,19 +139,19 @@ describe("AgentController", function () {
       const fromTier = 0;
       const toTier = 1;
       const amount = ethers.parseUnits("1000", 6);
-      const blockNum = await ethers.provider.getBlockNumber();
+      const nonce = 1;
       const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint8", "uint8", "uint256", "uint256"],
-        [fromTier, toTier, amount, blockNum]
+        ["uint8", "uint8", "uint256", "uint256", "address"],
+        [fromTier, toTier, amount, nonce, agentSigner.address]
       );
       const requestHash = ethers.keccak256(encoded);
 
       await agentController.connect(agentSigner).submitProposal(
-        fromTier, toTier, amount, "data:reasoning", requestHash
+        fromTier, toTier, amount, nonce, "data:reasoning", requestHash
       );
       await expect(
         agentController.connect(agentSigner).submitProposal(
-          fromTier, toTier, amount, "data:reasoning", requestHash
+          fromTier, toTier, amount, nonce, "data:reasoning", requestHash
         )
       ).to.be.revertedWith("AC: duplicate hash");
     });
@@ -161,7 +161,7 @@ describe("AgentController", function () {
       const requestHash = ethers.randomBytes(32);
       await expect(
         agentController.connect(agentSigner).submitProposal(
-          0, 1, ethers.parseUnits("1000", 6), "data:reasoning", requestHash
+          0, 1, ethers.parseUnits("1000", 6), 1, "data:reasoning", requestHash
         )
       ).to.be.revertedWith("AC: paused");
     });
@@ -170,7 +170,7 @@ describe("AgentController", function () {
       const requestHash = ethers.randomBytes(32);
       await expect(
         agentController.connect(agentSigner).submitProposal(
-          3, 1, 1000, "data:reasoning", requestHash
+          3, 1, 1000, 1, "data:reasoning", requestHash
         )
       ).to.be.revertedWith("AC: invalid tier");
     });
@@ -179,7 +179,7 @@ describe("AgentController", function () {
       const requestHash = ethers.randomBytes(32);
       await expect(
         agentController.connect(agentSigner).submitProposal(
-          1, 1, 1000, "data:reasoning", requestHash
+          1, 1, 1000, 1, "data:reasoning", requestHash
         )
       ).to.be.revertedWith("AC: same tier");
     });
@@ -199,7 +199,7 @@ describe("AgentController", function () {
 
       const requestHash = ethers.randomBytes(32);
       await expect(
-        ac.connect(agentSigner).submitProposal(0, 1, 1000, "data:reasoning", requestHash)
+        ac.connect(agentSigner).submitProposal(0, 1, 1000, 1, "data:reasoning", requestHash)
       ).to.be.revertedWith("AC: agent not registered");
     });
   });
@@ -225,15 +225,15 @@ describe("AgentController", function () {
       const fromTier = 0;
       const toTier = 1;
       const amount = ethers.parseUnits("1000", 6);
-      const blockNum = await ethers.provider.getBlockNumber();
+      const nonce = 1;
       const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint8", "uint8", "uint256", "uint256"],
-        [fromTier, toTier, amount, blockNum]
+        ["uint8", "uint8", "uint256", "uint256", "address"],
+        [fromTier, toTier, amount, nonce, agentSigner.address]
       );
       const requestHash = ethers.keccak256(encoded);
 
       await agentController.connect(agentSigner).submitProposal(
-        fromTier, toTier, amount, "data:reasoning", requestHash
+        fromTier, toTier, amount, nonce, "data:reasoning", requestHash
       );
 
       // Set validation response to 100 (pass) in mock
@@ -245,9 +245,17 @@ describe("AgentController", function () {
     });
 
     it("should reject execution of expired proposal", async function () {
-      const requestHash = ethers.randomBytes(32);
+      const fromTier = 0;
+      const toTier = 1;
+      const amount = 100;
+      const nonce = 1;
+      const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["uint8", "uint8", "uint256", "uint256", "address"],
+        [fromTier, toTier, amount, nonce, agentSigner.address]
+      );
+      const requestHash = ethers.keccak256(encoded);
       await agentController.connect(agentSigner).submitProposal(
-        0, 1, 100, "data:reasoning", requestHash
+        fromTier, toTier, amount, nonce, "data:reasoning", requestHash
       );
 
       await ethers.provider.send("evm_increaseTime", [31 * 60]);
