@@ -1,4 +1,5 @@
-import { ethers, network } from "hardhat";
+import { ethers } from "hardhat";
+import * as fs from "fs";
 
 async function main() {
   const network = process.env.HARDHAT_NETWORK || "mantleTestnet";
@@ -39,7 +40,36 @@ async function main() {
   const vaultManagerAddress = await vaultManager.getAddress();
   console.log("VaultManager deployed to:", vaultManagerAddress);
 
-  // 4. Configure roles
+  // 4. Deploy MockRegistries (ERC-8004 for hackathon)
+  console.log("\nDeploying MockRegistries...");
+  const MockRegistries = await ethers.getContractFactory("MockRegistries");
+  const mockRegistries = await MockRegistries.deploy();
+  await mockRegistries.waitForDeployment();
+  const mockRegistriesAddress = await mockRegistries.getAddress();
+  console.log("MockRegistries deployed to:", mockRegistriesAddress);
+
+  const identityRegistryAddress = mockRegistriesAddress;
+  const reputationRegistryAddress = mockRegistriesAddress;
+  const validationRegistryAddress = mockRegistriesAddress;
+  const validatorAddress = deployer.address;
+
+  // 5. Deploy AgentController
+  console.log("\nDeploying AgentController...");
+  const AgentController = await ethers.getContractFactory("AgentController");
+  const agentController = await AgentController.deploy(
+    identityRegistryAddress,
+    reputationRegistryAddress,
+    validationRegistryAddress,
+    vaultManagerAddress,
+    riskEngineAddress,
+    validatorAddress,
+    deployer.address
+  );
+  await agentController.waitForDeployment();
+  const agentControllerAddress = await agentController.getAddress();
+  console.log("AgentController deployed to:", agentControllerAddress);
+
+  // 6. Configure roles
   console.log("\nConfiguring roles...");
 
   const MINTER_ROLE = await invoiceNFT.MINTER_ROLE();
@@ -47,13 +77,24 @@ async function main() {
   console.log("Granted MINTER_ROLE to VaultManager");
 
   const VALIDATOR_ROLE = await invoiceNFT.VALIDATOR_ROLE();
-  await invoiceNFT.grantRole(VALIDATOR_ROLE, deployer.address);
-  console.log("Granted VALIDATOR_ROLE to deployer");
+  await invoiceNFT.grantRole(VALIDATOR_ROLE, vaultManagerAddress);
+  console.log("Granted VALIDATOR_ROLE to VaultManager");
 
   const AGENT_ROLE = ethers.keccak256(ethers.toUtf8Bytes("AGENT_ROLE"));
+  await vaultManager.grantRole(AGENT_ROLE, agentControllerAddress);
+  console.log("Granted AGENT_ROLE to AgentController");
 
-  console.log("\nNote: After deploying AgentController, grant AGENT_ROLE:");
-  console.log(`  await vaultManager.grantRole("${AGENT_ROLE}", <AgentController address>);`);
+  // 7. Register agent
+  console.log("\nRegistering agent...");
+  const agentURI = "data:application/json," + JSON.stringify({
+    name: "TILV Yield Optimizer",
+    version: "1.0.0",
+    network: network,
+    vaultManager: vaultManagerAddress,
+    riskEngine: riskEngineAddress
+  });
+  await agentController.registerAgent(agentURI);
+  console.log("Agent registered with URI");
 
   const deploymentInfo = {
     network: network,
@@ -62,14 +103,16 @@ async function main() {
       invoiceNFT: invoiceNFTAddress,
       riskEngine: riskEngineAddress,
       vaultManager: vaultManagerAddress,
+      agentController: agentControllerAddress,
+      mockRegistries: mockRegistriesAddress,
       usdt: USDT_ADDRESS
     },
     deployer: deployer.address,
     nextSteps: [
-      "Deploy ERC-8004 registries (IdentityRegistry, ReputationRegistry, ValidationRegistry)",
-      "Deploy AgentController with registry addresses",
-      "Grant AGENT_ROLE on VaultManager to AgentController",
-      "Deploy MockValidator for hackathon",
+      "For production: deploy real ERC-8004 registries",
+      "For production: deploy real zkML/TEE validator",
+      "Upload agent_registration.json to IPFS",
+      "Update agent URI with IPFS CID",
       "Verify all contracts on explorer"
     ]
   };
@@ -80,7 +123,6 @@ async function main() {
   console.log("\nDeployment Summary:\n");
   console.log(JSON.stringify(deploymentInfo, null, 2));
 
-  const fs = require("fs");
   fs.writeFileSync(
     "deployment.json",
     JSON.stringify(deploymentInfo, null, 2)

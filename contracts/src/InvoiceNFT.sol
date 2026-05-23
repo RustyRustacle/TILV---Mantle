@@ -96,7 +96,7 @@ contract InvoiceNFT is ERC721, ERC721URIStorage, AccessControl {
         uint256 advanceRate,
         bytes32 validationHash
     ) external onlyRole(VALIDATOR_ROLE) {
-        _requireOwned(tokenId);
+        require(_exists(tokenId), "Token does not exist");
         require(invoices[tokenId].status == InvoiceStatus.PENDING, "Invoice not pending");
         require(riskScore <= 100, "Risk score must be <= 100");
         require(advanceRate <= 10000, "Advance rate must be <= 10000 (100%)");
@@ -114,7 +114,7 @@ contract InvoiceNFT is ERC721, ERC721URIStorage, AccessControl {
         external
         onlyRole(MINTER_ROLE)
     {
-        _requireOwned(tokenId);
+        require(_exists(tokenId), "Token does not exist");
         require(invoices[tokenId].status == InvoiceStatus.VALIDATED, "Invoice not validated");
 
         invoices[tokenId].fundedAmount = fundedAmount;
@@ -128,7 +128,7 @@ contract InvoiceNFT is ERC721, ERC721URIStorage, AccessControl {
         external
         onlyRole(VALIDATOR_ROLE)
     {
-        _requireOwned(tokenId);
+        require(_exists(tokenId), "Token does not exist");
         require(invoices[tokenId].status == InvoiceStatus.FUNDED, "Invoice not in funded status");
 
         invoices[tokenId].status = InvoiceStatus.PAID;
@@ -138,7 +138,7 @@ contract InvoiceNFT is ERC721, ERC721URIStorage, AccessControl {
     }
 
     function markAsDefaulted(uint256 tokenId) external onlyRole(VALIDATOR_ROLE) {
-        _requireOwned(tokenId);
+        require(_exists(tokenId), "Token does not exist");
         require(block.timestamp > invoices[tokenId].dueDate, "Not yet overdue");
         require(invoices[tokenId].status == InvoiceStatus.FUNDED, "Invoice not funded");
 
@@ -149,7 +149,7 @@ contract InvoiceNFT is ERC721, ERC721URIStorage, AccessControl {
     }
 
     function cancelInvoice(uint256 tokenId) external {
-        _requireOwned(tokenId);
+        require(_exists(tokenId), "Token does not exist");
         require(
             msg.sender == invoices[tokenId].borrower || hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
             "Only borrower or admin can cancel"
@@ -167,7 +167,7 @@ contract InvoiceNFT is ERC721, ERC721URIStorage, AccessControl {
     }
 
     function getInvoice(uint256 tokenId) external view returns (Invoice memory) {
-        _requireOwned(tokenId);
+        require(_exists(tokenId), "Token does not exist");
         return invoices[tokenId];
     }
 
@@ -182,6 +182,10 @@ contract InvoiceNFT is ERC721, ERC721URIStorage, AccessControl {
         returns (string memory)
     {
         return super.tokenURI(tokenId);
+    }
+
+    function _burn(uint256 tokenId) internal override(ERC721, ERC721URIStorage) {
+        super._burn(tokenId);
     }
 
     function supportsInterface(bytes4 interfaceId)

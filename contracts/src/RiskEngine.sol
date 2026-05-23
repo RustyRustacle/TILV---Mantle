@@ -13,9 +13,13 @@ contract RiskEngine is Ownable {
         bool isValid;
     }
 
-    mapping(address => bool) public authorizedOracles;
+    address[] public oracleList;
 
+    mapping(address => bool) public authorizedOracles;
     mapping(uint256 => RiskAssessment) public assessments;
+
+    uint256[3] private tierScoreSum;
+    uint256[3] private tierScoreCount;
 
     uint256 public constant PRIME_MAX_SCORE = 30;
     uint256 public constant GROWTH_MAX_SCORE = 60;
@@ -25,22 +29,17 @@ contract RiskEngine is Ownable {
 
     event OracleAuthorized(address indexed oracle);
     event OracleRevoked(address indexed oracle);
-    event RiskAssessed(
-        uint256 indexed invoiceId,
-        uint256 score,
-        uint256 tier,
-        address indexed validator
-    );
+    event RiskAssessed(uint256 indexed invoiceId, uint256 score, uint256 tier, address indexed validator);
     event AssessmentInvalidated(uint256 indexed invoiceId);
 
-    constructor() Ownable(msg.sender) {
+    constructor() Ownable() {
         authorizedOracles[msg.sender] = true;
+        oracleList.push(msg.sender);
         emit OracleAuthorized(msg.sender);
     }
 
     function submitRiskAssessment(uint256 invoiceId, uint256 score)
-        external
-        onlyAuthorizedOracle
+        external onlyAuthorizedOracle
     {
         require(score <= 100, "Score must be <= 100");
         require(!assessments[invoiceId].isValid, "Assessment already exists");
@@ -55,47 +54,50 @@ contract RiskEngine is Ownable {
             isValid: true
         });
 
+        tierScoreSum[tier] += score;
+        tierScoreCount[tier]++;
+
         emit RiskAssessed(invoiceId, score, tier, msg.sender);
     }
 
     function getTierForScore(uint256 score) public pure returns (uint256) {
-        if (score <= PRIME_MAX_SCORE) {
-            return 0;
-        } else if (score <= GROWTH_MAX_SCORE) {
-            return 1;
-        } else {
-            return 2;
-        }
+        if (score <= PRIME_MAX_SCORE) return 0;
+        if (score <= GROWTH_MAX_SCORE) return 1;
+        return 2;
     }
 
     function isAssessmentValid(uint256 invoiceId) public view returns (bool) {
         RiskAssessment memory assessment = assessments[invoiceId];
-
-        if (!assessment.isValid) {
-            return false;
-        }
-
-        if (block.timestamp > assessment.timestamp + assessmentValidityPeriod) {
-            return false;
-        }
-
+        if (!assessment.isValid) return false;
+        if (block.timestamp > assessment.timestamp + assessmentValidityPeriod) return false;
         return true;
     }
 
-    function getRiskAssessment(uint256 invoiceId)
-        external
-        view
-        returns (RiskAssessment memory)
-    {
+    function getRiskAssessment(uint256 invoiceId) external view returns (RiskAssessment memory) {
         return assessments[invoiceId];
     }
 
     function getAverageRiskScore(uint8 tier) external view returns (uint256) {
-        return 0;
+        require(tier < 3, "Invalid tier");
+        if (tierScoreCount[tier] == 0) return 0;
+        return tierScoreSum[tier] / tierScoreCount[tier];
     }
 
     function invalidateAssessment(uint256 invoiceId) external onlyAuthorizedOracle {
-        assessments[invoiceId].isValid = false;
+        RiskAssessment storage assessment = assessments[invoiceId];
+        require(assessment.isValid, "Not valid");
+
+        uint256 tier = assessment.tier;
+        if (tierScoreCount[tier] > 0) {
+            if (tierScoreSum[tier] >= assessment.score) {
+                tierScoreSum[tier] -= assessment.score;
+            } else {
+                tierScoreSum[tier] = 0;
+            }
+            tierScoreCount[tier]--;
+        }
+
+        delete assessments[invoiceId];
         emit AssessmentInvalidated(invoiceId);
     }
 
@@ -104,6 +106,7 @@ contract RiskEngine is Ownable {
         require(!authorizedOracles[oracle], "Already authorized");
 
         authorizedOracles[oracle] = true;
+        oracleList.push(oracle);
         emit OracleAuthorized(oracle);
     }
 
@@ -117,6 +120,10 @@ contract RiskEngine is Ownable {
     function setAssessmentValidityPeriod(uint256 newPeriod) external onlyOwner {
         require(newPeriod > 0, "Period must be > 0");
         assessmentValidityPeriod = newPeriod;
+    }
+
+    function oracleCount() external view returns (uint256) {
+        return oracleList.length;
     }
 
     modifier onlyAuthorizedOracle() {

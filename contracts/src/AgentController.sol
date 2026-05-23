@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 interface IERC8004Identity {
     struct MetadataEntry {
@@ -72,14 +72,10 @@ interface IERC8004Validation {
 
 interface IVaultManager {
     function rebalance(uint8 fromTier, uint8 toTier, uint256 amount) external;
-    function getVaultState(uint8 tier)
-        external view
-        returns (
-            uint256 tvl,
-            uint256 utilization,
-            uint256 currentApy
-        );
+    function reverseRebalance(uint256 loanIndex) external;
+    function getVaultState(uint8 tier) external view returns (uint256 tvl, uint256 utilization, uint256 currentApy);
     function getTotalLiquidity() external view returns (uint256);
+    function paused() external view returns (bool);
 }
 
 interface IRiskEngine {
@@ -99,7 +95,6 @@ contract AgentController is Ownable, ReentrancyGuard {
     bool    public agentRegistered;
 
     address public agentSigner;
-
     address public validatorAddress;
 
     uint256 public maxRebalanceBps   = 2000;
@@ -121,15 +116,15 @@ contract AgentController is Ownable, ReentrancyGuard {
     }
 
     mapping(bytes32 => Proposal) public proposals;
-    bytes32[] public proposalHistory;
+    uint256 public proposalCount;
 
     event AgentRegistered(uint256 indexed agentId, string agentURI);
     event ProposalSubmitted(bytes32 indexed requestHash, uint8 fromTier, uint8 toTier, uint256 amount);
     event ProposalExecuted(bytes32 indexed requestHash, uint8 fromTier, uint8 toTier, uint256 amount, int128 yieldDelta);
     event ProposalRejected(bytes32 indexed requestHash, string reason);
     event ReputationWritten(uint256 indexed agentId, int128 yieldDelta, string period);
-    event EmergencyPause(address indexed by);
-    event EmergencyUnpause(address indexed by);
+    event Paused(address indexed by);
+    event Unpaused(address indexed by);
 
     modifier onlySigner() {
         require(msg.sender == agentSigner, "AC: not agent signer");
@@ -138,6 +133,11 @@ contract AgentController is Ownable, ReentrancyGuard {
 
     modifier notPaused() {
         require(!paused, "AC: paused");
+        _;
+    }
+
+    modifier onlyWhenNotShutdown() {
+        require(!vaultManager.paused(), "AC: protocol shutdown");
         _;
     }
 
@@ -154,7 +154,15 @@ contract AgentController is Ownable, ReentrancyGuard {
         address _riskEngine,
         address _validatorAddress,
         address _agentSigner
-    ) Ownable(msg.sender) {
+    ) Ownable() {
+        require(_identityRegistry != address(0), "AC: zero identity");
+        require(_reputationRegistry != address(0), "AC: zero reputation");
+        require(_validationRegistry != address(0), "AC: zero validation");
+        require(_vaultManager != address(0), "AC: zero vaultManager");
+        require(_riskEngine != address(0), "AC: zero riskEngine");
+        require(_validatorAddress != address(0), "AC: zero validator");
+        require(_agentSigner != address(0), "AC: zero signer");
+
         identityRegistry   = IERC8004Identity(_identityRegistry);
         reputationRegistry = IERC8004Reputation(_reputationRegistry);
         validationRegistry = IERC8004Validation(_validationRegistry);
@@ -166,7 +174,7 @@ contract AgentController is Ownable, ReentrancyGuard {
 
     function registerAgent(string calldata agentURI) external onlyOwner {
         require(!agentRegistered, "AC: already registered");
-        agentId        = identityRegistry.register(agentURI);
+        agentId = identityRegistry.register(agentURI);
         agentRegistered = true;
         emit AgentRegistered(agentId, agentURI);
     }
@@ -175,13 +183,17 @@ contract AgentController is Ownable, ReentrancyGuard {
         uint8   fromTier,
         uint8   toTier,
         uint256 amount,
+        uint256 nonce,
         string  calldata requestURI,
         bytes32 requestHash
-    ) external onlySigner notPaused agentReady nonReentrant {
+    ) external onlySigner notPaused onlyWhenNotShutdown agentReady nonReentrant {
         require(fromTier < 3 && toTier < 3, "AC: invalid tier");
-        require(fromTier != toTier,          "AC: same tier");
-        require(amount > 0,                  "AC: zero amount");
+        require(fromTier != toTier, "AC: same tier");
+        require(amount > 0, "AC: zero amount");
         require(proposals[requestHash].submittedAt == 0, "AC: duplicate hash");
+
+        bytes32 computedHash = keccak256(abi.encode(fromTier, toTier, amount, nonce, msg.sender));
+        require(requestHash == computedHash, "AC: invalid hash");
 
         uint256 totalLiq = vaultManager.getTotalLiquidity();
         require(
@@ -203,7 +215,7 @@ contract AgentController is Ownable, ReentrancyGuard {
             status:        ProposalStatus.Pending,
             yieldDeltaBps: 0
         });
-        proposalHistory.push(requestHash);
+        proposalCount++;
 
         validationRegistry.validationRequest(
             validatorAddress,
@@ -216,14 +228,11 @@ contract AgentController is Ownable, ReentrancyGuard {
     }
 
     function executeProposal(bytes32 requestHash)
-        external
-        notPaused
-        agentReady
-        nonReentrant
+        external notPaused onlyWhenNotShutdown agentReady nonReentrant
     {
         Proposal storage p = proposals[requestHash];
-        require(p.submittedAt > 0,                       "AC: unknown proposal");
-        require(p.status == ProposalStatus.Pending,      "AC: not pending");
+        require(p.submittedAt > 0, "AC: unknown proposal");
+        require(p.status == ProposalStatus.Pending, "AC: not pending");
         require(
             block.timestamp <= p.submittedAt + validationTimeout,
             "AC: proposal expired"
@@ -288,10 +297,6 @@ contract AgentController is Ownable, ReentrancyGuard {
         }
     }
 
-    function getProposalCount() external view returns (uint256) {
-        return proposalHistory.length;
-    }
-
     function setAgentSigner(address _signer) external onlyOwner {
         require(_signer != address(0), "AC: zero address");
         agentSigner = _signer;
@@ -317,11 +322,15 @@ contract AgentController is Ownable, ReentrancyGuard {
 
     function pause() external onlyOwner {
         paused = true;
-        emit EmergencyPause(msg.sender);
+        emit Paused(msg.sender);
     }
 
     function unpause() external onlyOwner {
         paused = false;
-        emit EmergencyUnpause(msg.sender);
+        emit Unpaused(msg.sender);
+    }
+
+    function renounceOwnership() public override onlyOwner {
+        revert("AC: cannot renounce ownership");
     }
 }

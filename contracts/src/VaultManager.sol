@@ -3,9 +3,8 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./InvoiceNFT.sol";
 import "./EmergencyPause.sol";
 
@@ -14,17 +13,14 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
 
     bytes32 public constant AGENT_ROLE = keccak256("AGENT_ROLE");
 
-    enum VaultTier {
-        PRIME,
-        GROWTH,
-        EMERGING
-    }
+    enum VaultTier { PRIME, GROWTH, EMERGING }
 
     struct Vault {
         VaultTier tier;
         uint256 totalDeposits;
         uint256 totalAllocated;
         uint256 totalReturns;
+        uint256 totalBadDebt;
         uint256 minDeposit;
         uint256 maxRiskScore;
         uint256 advanceRate;
@@ -38,30 +34,37 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
         uint256 claimedReturns;
     }
 
+    struct CrossVaultLoan {
+        uint8 fromTier;
+        uint8 toTier;
+        uint256 amount;
+        uint256 timestamp;
+        bool active;
+    }
+
     IERC20 public stablecoin;
     InvoiceNFT public invoiceNFT;
+    address public feeCollector;
 
     mapping(VaultTier => Vault) public vaults;
     mapping(VaultTier => mapping(address => InvestorPosition)) public positions;
     mapping(uint256 => VaultTier) public invoiceAllocations;
     mapping(uint256 => uint256) public invoiceFunding;
 
+    CrossVaultLoan[] public rebalanceLoans;
+
     uint256 public constant BASIS_POINTS = 10000;
     uint256 public constant PLATFORM_FEE = 200;
 
     event VaultDeposit(address indexed investor, VaultTier tier, uint256 amount, uint256 shares);
-    event VaultWithdrawal(address indexed investor, VaultTier tier, uint256 amount, uint256 shares);
+    event VaultWithdrawal(address indexed investor, VaultTier tier, uint256 amount, uint256 shares, uint256 returnedYield);
     event InvoiceFunded(uint256 indexed invoiceId, VaultTier tier, uint256 amount);
     event InvoiceRepaid(uint256 indexed invoiceId, uint256 amount, uint256 yield);
+    event InvoiceDefaulted(uint256 indexed invoiceId, uint256 loss);
     event YieldDistributed(VaultTier tier, uint256 totalYield);
-    event VaultRebalanced(uint8 fromTier, uint8 toTier, uint256 amount);
-    event EmergencyPause(address indexed by);
-    event EmergencyUnpause(address indexed by);
-
-    modifier notPaused() {
-        require(!paused, "VM: paused");
-        _;
-    }
+    event VaultRebalanced(uint8 fromTier, uint8 toTier, uint256 amount, uint256 loanIndex);
+    event RebalanceReversed(uint8 fromTier, uint8 toTier, uint256 amount, uint256 loanIndex);
+    event BadDebtWrittenOff(VaultTier tier, uint256 amount);
 
     constructor(address _stablecoin, address _invoiceNFT) {
         require(_stablecoin != address(0), "Invalid stablecoin address");
@@ -69,6 +72,7 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
 
         stablecoin = IERC20(_stablecoin);
         invoiceNFT = InvoiceNFT(_invoiceNFT);
+        feeCollector = msg.sender;
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(PAUSER_ROLE, msg.sender);
@@ -80,6 +84,7 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
             totalDeposits: 0,
             totalAllocated: 0,
             totalReturns: 0,
+            totalBadDebt: 0,
             minDeposit: 1000 * 10**6,
             maxRiskScore: 30,
             advanceRate: 8000,
@@ -91,6 +96,7 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
             totalDeposits: 0,
             totalAllocated: 0,
             totalReturns: 0,
+            totalBadDebt: 0,
             minDeposit: 500 * 10**6,
             maxRiskScore: 60,
             advanceRate: 7500,
@@ -102,6 +108,7 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
             totalDeposits: 0,
             totalAllocated: 0,
             totalReturns: 0,
+            totalBadDebt: 0,
             minDeposit: 100 * 10**6,
             maxRiskScore: 100,
             advanceRate: 7000,
@@ -111,25 +118,26 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
 
     function deposit(VaultTier tier, uint256 amount) external nonReentrant whenNotPaused whenNotShutdown {
         Vault storage vault = vaults[tier];
-        require(vault.isActive, "Vault is not active");
-        require(amount >= vault.minDeposit, "Amount below minimum deposit");
+        require(vault.isActive, "VM: vault not active");
+        require(amount >= vault.minDeposit, "VM: below minimum deposit");
 
-        InvestorPosition storage position = positions[tier][msg.sender];
+        InvestorPosition storage pos = positions[tier][msg.sender];
 
         stablecoin.safeTransferFrom(msg.sender, address(this), amount);
 
         uint256 totalShares = getTotalShares(tier);
+        uint256 totalValue = getTotalValue(tier);
         uint256 shares;
-        if (totalShares == 0 || vault.totalDeposits == 0) {
+        if (totalShares == 0 || totalValue == 0) {
             shares = amount;
         } else {
-            shares = (amount * totalShares) / vault.totalDeposits;
+            shares = (amount * totalShares) / totalValue;
         }
 
-        position.depositedAmount += amount;
-        position.shares += shares;
-        if (position.depositTimestamp == 0) {
-            position.depositTimestamp = block.timestamp;
+        pos.depositedAmount += amount;
+        pos.shares += shares;
+        if (pos.depositTimestamp == 0) {
+            pos.depositTimestamp = block.timestamp;
         }
 
         vault.totalDeposits += amount;
@@ -137,75 +145,78 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
         emit VaultDeposit(msg.sender, tier, amount, shares);
     }
 
-    function withdraw(VaultTier tier, uint256 shares) external nonReentrant whenNotPaused whenNotShutdown {
+    function withdraw(VaultTier tier, uint256 shares, uint256 minAmountOut) external nonReentrant whenNotPaused whenNotShutdown {
         Vault storage vault = vaults[tier];
-        InvestorPosition storage position = positions[tier][msg.sender];
+        InvestorPosition storage pos = positions[tier][msg.sender];
 
-        require(position.shares >= shares, "Insufficient shares");
-        require(getAvailableLiquidity(tier) >= (shares * getTotalValue(tier)) / getTotalShares(tier), "Insufficient liquidity");
+        require(pos.shares >= shares, "VM: insufficient shares");
 
-        uint256 totalValue = getTotalValue(tier);
         uint256 totalShares = getTotalShares(tier);
+        uint256 totalValue = getTotalValue(tier);
         uint256 withdrawAmount = (shares * totalValue) / totalShares;
 
-        if (shares == position.shares) {
-            position.depositedAmount = 0;
-        } else {
-            position.depositedAmount = (position.depositedAmount * (position.shares - shares)) / position.shares;
-        }
-        position.shares -= shares;
+        require(withdrawAmount >= minAmountOut, "VM: slippage too high");
 
-        vault.totalDeposits -= withdrawAmount;
+        uint256 availLiquidity = getAvailableLiquidity(tier);
+        require(withdrawAmount <= availLiquidity, "VM: insufficient liquidity");
+
+        uint256 originalDeposit = pos.depositedAmount;
+        uint256 principalPortion;
+        uint256 yieldPortion = 0;
+
+        if (shares == pos.shares) {
+            principalPortion = originalDeposit;
+            pos.depositedAmount = 0;
+        } else {
+            principalPortion = (originalDeposit * shares) / pos.shares;
+            pos.depositedAmount = originalDeposit - principalPortion;
+        }
+
+        if (withdrawAmount > principalPortion) {
+            yieldPortion = withdrawAmount - principalPortion;
+        }
+
+        pos.shares -= shares;
+
+        vault.totalDeposits -= principalPortion;
+        if (yieldPortion > 0 && vault.totalReturns >= yieldPortion) {
+            vault.totalReturns -= yieldPortion;
+        }
+        pos.claimedReturns += yieldPortion;
 
         stablecoin.safeTransfer(msg.sender, withdrawAmount);
 
-        emit VaultWithdrawal(msg.sender, tier, withdrawAmount, shares);
+        emit VaultWithdrawal(msg.sender, tier, withdrawAmount, shares, yieldPortion);
     }
 
-    function fundInvoice(uint256 invoiceId) external onlyOwner nonReentrant whenNotPaused whenNotShutdown {
-        InvoiceNFT.Invoice memory invoice = invoiceNFT.getInvoice(invoiceId);
+    function fundInvoice(uint256 invoiceId) external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant whenNotPaused whenNotShutdown {
+        InvoiceNFT.Invoice memory inv = invoiceNFT.getInvoice(invoiceId);
+        require(inv.status == InvoiceNFT.InvoiceStatus.VALIDATED, "VM: must be validated");
 
-        require(
-            invoice.status == InvoiceNFT.InvoiceStatus.VALIDATED,
-            "Invoice must be validated"
-        );
-
-        VaultTier tier = getVaultTierForRisk(invoice.riskScore);
+        VaultTier tier = getVaultTierForRisk(inv.riskScore);
         Vault storage vault = vaults[tier];
 
-        require(vault.isActive, "Vault is not active");
-        require(invoice.riskScore <= vault.maxRiskScore, "Risk score too high for vault");
+        require(vault.isActive, "VM: vault not active");
+        require(inv.riskScore <= vault.maxRiskScore, "VM: risk score too high");
 
-        uint256 fundingAmount = (invoice.amount * vault.advanceRate) / BASIS_POINTS;
-
-        require(
-            getAvailableLiquidity(tier) >= fundingAmount,
-            "Insufficient vault liquidity"
-        );
+        uint256 fundingAmount = (inv.amount * vault.advanceRate) / BASIS_POINTS;
+        require(getAvailableLiquidity(tier) >= fundingAmount, "VM: insufficient liquidity");
 
         vault.totalAllocated += fundingAmount;
         invoiceAllocations[invoiceId] = tier;
         invoiceFunding[invoiceId] = fundingAmount;
 
-        stablecoin.safeTransfer(invoice.borrower, fundingAmount);
-
+        stablecoin.safeTransfer(inv.borrower, fundingAmount);
         invoiceNFT.markAsFunded(invoiceId, fundingAmount);
 
         emit InvoiceFunded(invoiceId, tier, fundingAmount);
     }
 
     function processRepayment(uint256 invoiceId, uint256 repaymentAmount)
-        external
-        onlyOwner
-        nonReentrant
-        whenNotPaused
-        whenNotShutdown
+        external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant whenNotPaused whenNotShutdown
     {
-        InvoiceNFT.Invoice memory invoice = invoiceNFT.getInvoice(invoiceId);
-        require(
-            invoice.status == InvoiceNFT.InvoiceStatus.FUNDED,
-            "Invoice not in funded status"
-        );
+        InvoiceNFT.Invoice memory inv = invoiceNFT.getInvoice(invoiceId);
+        require(inv.status == InvoiceNFT.InvoiceStatus.FUNDED, "VM: not funded");
 
         VaultTier tier = invoiceAllocations[invoiceId];
         Vault storage vault = vaults[tier];
@@ -216,51 +227,50 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
         uint256 platformFee = (repaymentAmount * PLATFORM_FEE) / BASIS_POINTS;
         uint256 vaultReturn = repaymentAmount - platformFee;
 
-        uint256 yield = vaultReturn > fundedAmount ? vaultReturn - fundedAmount : 0;
-
         vault.totalAllocated -= fundedAmount;
-        vault.totalReturns += yield;
-        vault.totalDeposits += yield;
+
+        if (vaultReturn >= fundedAmount) {
+            uint256 yield_ = vaultReturn - fundedAmount;
+            vault.totalReturns += yield_;
+            emit YieldDistributed(tier, yield_);
+        } else {
+            uint256 loss = fundedAmount - vaultReturn;
+            vault.totalBadDebt += loss;
+            vault.totalDeposits -= loss;
+            emit BadDebtWrittenOff(tier, loss);
+        }
 
         invoiceNFT.markAsPaid(invoiceId, repaymentAmount);
 
         if (platformFee > 0) {
-            stablecoin.safeTransfer(owner(), platformFee);
+            stablecoin.safeTransfer(feeCollector, platformFee);
         }
 
-        emit InvoiceRepaid(invoiceId, repaymentAmount, yield);
-        emit YieldDistributed(tier, yield);
+        emit InvoiceRepaid(invoiceId, repaymentAmount, vaultReturn > fundedAmount ? vaultReturn - fundedAmount : 0);
     }
 
-    function processDefault(uint256 invoiceId)
-        external
-        onlyOwner
-        nonReentrant
-        whenNotPaused
-        whenNotShutdown
-    {
-        InvoiceNFT.Invoice memory invoice = invoiceNFT.getInvoice(invoiceId);
-        require(
-            invoice.status == InvoiceNFT.InvoiceStatus.DEFAULTED,
-            "Invoice not defaulted"
-        );
+    function processDefault(uint256 invoiceId) external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant whenNotPaused whenNotShutdown {
+        InvoiceNFT.Invoice memory inv = invoiceNFT.getInvoice(invoiceId);
+        require(inv.status == InvoiceNFT.InvoiceStatus.DEFAULTED, "VM: not defaulted");
 
         VaultTier tier = invoiceAllocations[invoiceId];
         Vault storage vault = vaults[tier];
         uint256 fundedAmount = invoiceFunding[invoiceId];
+        require(fundedAmount > 0, "VM: not funded by vault");
 
         vault.totalAllocated -= fundedAmount;
+        vault.totalBadDebt += fundedAmount;
+        vault.totalDeposits -= fundedAmount;
+
+        emit BadDebtWrittenOff(tier, fundedAmount);
+        emit InvoiceDefaulted(invoiceId, fundedAmount);
 
         delete invoiceAllocations[invoiceId];
         delete invoiceFunding[invoiceId];
     }
 
     function rebalance(uint8 fromTier, uint8 toTier, uint256 amount)
-        external
-        onlyRole(AGENT_ROLE)
-        nonReentrant
-        whenNotPaused
-        whenNotShutdown
+        external onlyRole(AGENT_ROLE) nonReentrant whenNotPaused whenNotShutdown
     {
         require(fromTier < 3 && toTier < 3, "VM: invalid tier");
         require(fromTier != toTier, "VM: same tier");
@@ -271,78 +281,106 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
 
         require(fromVault.isActive && toVault.isActive, "VM: vault not active");
         require(getAvailableLiquidity(VaultTier(fromTier)) >= amount, "VM: insufficient liquidity");
-        require(
-            toVault.totalDeposits + amount <= type(uint256).max - toVault.totalAllocated,
-            "VM: overflow"
-        );
 
-        fromVault.totalAllocated += amount;
+        fromVault.totalDeposits -= amount;
         toVault.totalDeposits += amount;
 
-        emit VaultRebalanced(fromTier, toTier, amount);
+        rebalanceLoans.push(CrossVaultLoan({
+            fromTier: fromTier,
+            toTier: toTier,
+            amount: amount,
+            timestamp: block.timestamp,
+            active: true
+        }));
+
+        emit VaultRebalanced(fromTier, toTier, amount, rebalanceLoans.length - 1);
+    }
+
+    function reverseRebalance(uint256 loanIndex) external onlyRole(AGENT_ROLE) nonReentrant whenNotPaused whenNotShutdown {
+        require(loanIndex < rebalanceLoans.length, "VM: invalid loan index");
+        CrossVaultLoan storage loan = rebalanceLoans[loanIndex];
+        require(loan.active, "VM: loan already reversed");
+
+        Vault storage fromVault = vaults[VaultTier(loan.toTier)];
+        Vault storage toVault = vaults[VaultTier(loan.fromTier)];
+
+        require(getAvailableLiquidity(VaultTier(loan.toTier)) >= loan.amount, "VM: insufficient liquidity to reverse");
+
+        fromVault.totalDeposits -= loan.amount;
+        toVault.totalDeposits += loan.amount;
+
+        loan.active = false;
+
+        emit RebalanceReversed(loan.fromTier, loan.toTier, loan.amount, loanIndex);
     }
 
     function getVaultTierForRisk(uint256 riskScore) public pure returns (VaultTier) {
-        if (riskScore <= 30) {
-            return VaultTier.PRIME;
-        } else if (riskScore <= 60) {
-            return VaultTier.GROWTH;
-        } else {
-            return VaultTier.EMERGING;
-        }
+        if (riskScore <= 30) return VaultTier.PRIME;
+        if (riskScore <= 60) return VaultTier.GROWTH;
+        return VaultTier.EMERGING;
     }
 
     function getTotalShares(VaultTier tier) public view returns (uint256) {
-        return vaults[tier].totalDeposits;
+        Vault memory v = vaults[tier];
+        if (v.totalDeposits == 0) return 0;
+        if (v.totalDeposits + v.totalReturns <= v.totalBadDebt) return v.totalDeposits;
+        return v.totalDeposits;
     }
 
     function getTotalValue(VaultTier tier) public view returns (uint256) {
-        Vault memory vault = vaults[tier];
-        return vault.totalDeposits + vault.totalReturns - vault.totalAllocated;
+        Vault memory v = vaults[tier];
+        uint256 assets = v.totalDeposits + v.totalReturns;
+        uint256 liabilities = v.totalAllocated + v.totalBadDebt;
+        if (assets <= liabilities) return 0;
+        return assets - liabilities;
     }
 
-    function getPosition(VaultTier tier, address investor)
-        external
-        view
-        returns (InvestorPosition memory)
-    {
+    function getPosition(VaultTier tier, address investor) external view returns (InvestorPosition memory) {
         return positions[tier][investor];
     }
 
     function getAvailableLiquidity(VaultTier tier) public view returns (uint256) {
-        Vault memory vault = vaults[tier];
-        return vault.totalDeposits - vault.totalAllocated;
+        Vault memory v = vaults[tier];
+        uint256 liquid = v.totalDeposits + v.totalReturns;
+        uint256 locked = v.totalAllocated + v.totalBadDebt;
+        if (liquid <= locked) return 0;
+        return liquid - locked;
     }
 
     function getVault(VaultTier tier) external view returns (Vault memory) {
         return vaults[tier];
     }
 
-    function getVaultState(uint8 tier)
-        external
-        view
-        returns (
-            uint256 tvl,
-            uint256 utilization,
-            uint256 currentApy
-        )
-    {
-        Vault memory vault = vaults[VaultTier(tier)];
-        tvl = vault.totalDeposits;
-        if (tvl > 0) {
-            utilization = (vault.totalAllocated * BASIS_POINTS) / tvl;
+    function getVaultState(uint8 tier) external view returns (uint256 tvl, uint256 utilization, uint256 currentApy) {
+        Vault memory v = vaults[VaultTier(tier)];
+        tvl = getTotalValue(VaultTier(tier));
+        uint256 depositBase = v.totalDeposits + v.totalReturns;
+        if (depositBase > 0 && v.totalAllocated > 0) {
+            utilization = (v.totalAllocated * BASIS_POINTS) / depositBase;
         }
-        if (vault.totalDeposits > 0 && vault.totalReturns > 0) {
-            currentApy = (vault.totalReturns * BASIS_POINTS) / vault.totalDeposits;
+        if (v.totalReturns > 0 && v.totalDeposits > 0) {
+            currentApy = (v.totalReturns * BASIS_POINTS) / v.totalDeposits;
         }
     }
 
     function getTotalLiquidity() external view returns (uint256) {
         uint256 total;
         for (uint8 i = 0; i < 3; i++) {
-            total += vaults[VaultTier(i)].totalDeposits;
+            total += getTotalValue(VaultTier(i));
         }
         return total;
+    }
+
+    function getLoanCount() external view returns (uint256) {
+        return rebalanceLoans.length;
+    }
+
+    function getActiveLoanCount() external view returns (uint256) {
+        uint256 count;
+        for (uint256 i = 0; i < rebalanceLoans.length; i++) {
+            if (rebalanceLoans[i].active) count++;
+        }
+        return count;
     }
 
     function updateVaultParameters(
@@ -350,38 +388,26 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
         uint256 minDeposit,
         uint256 maxRiskScore,
         uint256 advanceRate
-    ) external onlyOwner {
-        require(maxRiskScore <= 100, "Risk score must be <= 100");
-        require(advanceRate <= BASIS_POINTS, "Advance rate must be <= 100%");
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(maxRiskScore <= 100, "VM: risk score max 100");
+        require(advanceRate <= BASIS_POINTS, "VM: advance rate max 100%");
 
-        Vault storage vault = vaults[tier];
-        vault.minDeposit = minDeposit;
-        vault.maxRiskScore = maxRiskScore;
-        vault.advanceRate = advanceRate;
+        Vault storage v = vaults[tier];
+        v.minDeposit = minDeposit;
+        v.maxRiskScore = maxRiskScore;
+        v.advanceRate = advanceRate;
     }
 
-    function setVaultActive(VaultTier tier, bool active) external onlyOwner {
+    function setFeeCollector(address collector) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(collector != address(0), "VM: zero address");
+        feeCollector = collector;
+    }
+
+    function setVaultActive(VaultTier tier, bool active) external onlyRole(DEFAULT_ADMIN_ROLE) {
         vaults[tier].isActive = active;
     }
 
-    function triggerEmergencyShutdown(string calldata reason) external onlyRole(EMERGENCY_ADMIN_ROLE) {
-        // This will call the one from EmergencyPause
-        super.triggerEmergencyShutdown(reason);
-        emit EmergencyPause(msg.sender);
-    }
-
-    function initiateGracefulShutdown() external onlyRole(EMERGENCY_ADMIN_ROLE) {
-        super.initiateGracefulShutdown();
-        // Additional graceful logic if needed
-        emit GracefulShutdownComplete(msg.sender);
-    }
-
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        override(AccessControl)
-        returns (bool)
-    {
+    function supportsInterface(bytes4 interfaceId) public view override(AccessControl) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 }
