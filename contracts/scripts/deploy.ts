@@ -40,17 +40,28 @@ async function main() {
   const vaultManagerAddress = await vaultManager.getAddress();
   console.log("VaultManager deployed to:", vaultManagerAddress);
 
-  // 4. Deploy MockRegistries (ERC-8004 for hackathon)
-  console.log("\nDeploying MockRegistries...");
-  const MockRegistries = await ethers.getContractFactory("MockRegistries");
-  const mockRegistries = await MockRegistries.deploy();
-  await mockRegistries.waitForDeployment();
-  const mockRegistriesAddress = await mockRegistries.getAddress();
-  console.log("MockRegistries deployed to:", mockRegistriesAddress);
+  // 4. Deploy Mock ERC-8004 Registries (for hackathon)
+  console.log("\nDeploying MockIdentityRegistry...");
+  const MockIdentity = await ethers.getContractFactory("MockIdentityRegistry");
+  const mockIdentity = await MockIdentity.deploy();
+  await mockIdentity.waitForDeployment();
+  const identityRegistryAddress = await mockIdentity.getAddress();
+  console.log("MockIdentityRegistry deployed to:", identityRegistryAddress);
 
-  const identityRegistryAddress = mockRegistriesAddress;
-  const reputationRegistryAddress = mockRegistriesAddress;
-  const validationRegistryAddress = mockRegistriesAddress;
+  console.log("\nDeploying MockReputationRegistry...");
+  const MockReputation = await ethers.getContractFactory("MockReputationRegistry");
+  const mockReputation = await MockReputation.deploy();
+  await mockReputation.waitForDeployment();
+  const reputationRegistryAddress = await mockReputation.getAddress();
+  console.log("MockReputationRegistry deployed to:", reputationRegistryAddress);
+
+  console.log("\nDeploying MockValidationRegistry...");
+  const MockValidation = await ethers.getContractFactory("MockValidationRegistry");
+  const mockValidation = await MockValidation.deploy();
+  await mockValidation.waitForDeployment();
+  const validationRegistryAddress = await mockValidation.getAddress();
+  console.log("MockValidationRegistry deployed to:", validationRegistryAddress);
+
   const validatorAddress = deployer.address;
 
   // 5. Deploy AgentController
@@ -104,7 +115,9 @@ async function main() {
       riskEngine: riskEngineAddress,
       vaultManager: vaultManagerAddress,
       agentController: agentControllerAddress,
-      mockRegistries: mockRegistriesAddress,
+      mockIdentityRegistry: identityRegistryAddress,
+      mockReputationRegistry: reputationRegistryAddress,
+      mockValidationRegistry: validationRegistryAddress,
       usdt: USDT_ADDRESS
     },
     deployer: deployer.address,

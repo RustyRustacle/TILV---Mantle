@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -89,11 +89,8 @@ contract RiskEngine is Ownable {
 
         uint256 tier = assessment.tier;
         if (tierScoreCount[tier] > 0) {
-            if (tierScoreSum[tier] >= assessment.score) {
-                tierScoreSum[tier] -= assessment.score;
-            } else {
-                tierScoreSum[tier] = 0;
-            }
+            require(tierScoreSum[tier] >= assessment.score, "RE: score sum underflow");
+            tierScoreSum[tier] -= assessment.score;
             tierScoreCount[tier]--;
         }
 

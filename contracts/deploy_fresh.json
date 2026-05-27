@@ -1,0 +1,15 @@
+{
+  "network": "mantleMainnet",
+  "deployedAt": "2026-05-26T16:19:51.819Z",
+  "contracts": {
+    "invoiceNFT": "0x07850E07d36d00d44ed605140025DeB1e801a0f3",
+    "riskEngine": "0x146B1D2d8bA9cD85A44cf1E980E5c657f32643F5",
+    "vaultManager": "0xa66D278d104A2F158BD90a5eb88531f7BD702E73",
+    "agentController": "0x0f2ef2e53ab6B6237A5A11543185B686Ffe9f210",
+    "mockIdentityRegistry": "0xd1e1837A45c75a2e1Be2800f380950cCe373ad5a",
+    "mockReputationRegistry": "0x4dE534158840Af1e8cFA1862F926F79FD772A519",
+    "mockValidationRegistry": "0xBA3530d53d2AabF2538Bf880dA4B8e74933567b6",
+    "usdt": "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE"
+  },
+  "deployer": "0xafe76605852D1eef8F7441B523DBb40bDD6BC1Ab"
+}

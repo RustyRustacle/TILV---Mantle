@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -74,7 +74,7 @@ interface IVaultManager {
     function rebalance(uint8 fromTier, uint8 toTier, uint256 amount) external;
     function reverseRebalance(uint256 loanIndex) external;
     function getVaultState(uint8 tier) external view returns (uint256 tvl, uint256 utilization, uint256 currentApy);
-    function getTotalLiquidity() external view returns (uint256);
+    function getFreeLiquidity() external view returns (uint256);
     function paused() external view returns (bool);
 }
 
@@ -123,6 +123,10 @@ contract AgentController is Ownable, ReentrancyGuard {
     event ProposalExecuted(bytes32 indexed requestHash, uint8 fromTier, uint8 toTier, uint256 amount, int128 yieldDelta);
     event ProposalRejected(bytes32 indexed requestHash, string reason);
     event ReputationWritten(uint256 indexed agentId, int128 yieldDelta, string period);
+    event AgentSignerUpdated(address indexed newSigner);
+    event ValidatorAddressUpdated(address indexed newValidator);
+    event MaxRebalanceBpsUpdated(uint256 newBps);
+    event CooldownPeriodUpdated(uint256 newCooldown);
     event Paused(address indexed by);
     event Unpaused(address indexed by);
 
@@ -195,7 +199,7 @@ contract AgentController is Ownable, ReentrancyGuard {
         bytes32 computedHash = keccak256(abi.encode(fromTier, toTier, amount, nonce, msg.sender));
         require(requestHash == computedHash, "AC: invalid hash");
 
-        uint256 totalLiq = vaultManager.getTotalLiquidity();
+        uint256 totalLiq = vaultManager.getFreeLiquidity();
         require(
             amount <= (totalLiq * maxRebalanceBps) / 10000,
             "AC: exceeds max rebalance"
@@ -264,22 +268,36 @@ contract AgentController is Ownable, ReentrancyGuard {
 
         emit ProposalExecuted(requestHash, p.fromTier, p.toTier, p.amount, delta);
 
-        _writeReputation(delta);
+        _writeReputation(delta, requestHash);
     }
 
-    function _writeReputation(int128 yieldDeltaBps) internal {
-        reputationRegistry.giveFeedback(
-            agentId,
-            yieldDeltaBps,
-            2,
-            "tradingYield",
-            "week",
-            "",
-            "",
-            bytes32(0)
+    function _writeReputation(int128 yieldDeltaBps, bytes32 requestHash) internal {
+        (bool success, ) = address(reputationRegistry).call(
+            abi.encodeWithSelector(
+                IERC8004Reputation.giveFeedback.selector,
+                agentId,
+                yieldDeltaBps,
+                uint8(2),
+                "tradingYield",
+                "week",
+                "",
+                "",
+                requestHash
+            )
         );
 
-        emit ReputationWritten(agentId, yieldDeltaBps, "week");
+        if (success) {
+            emit ReputationWritten(agentId, yieldDeltaBps, "week");
+        }
+    }
+
+    function expireProposal(bytes32 requestHash) external onlyOwner {
+        Proposal storage p = proposals[requestHash];
+        require(p.submittedAt > 0, "AC: unknown proposal");
+        require(p.status == ProposalStatus.Pending, "AC: not pending");
+        require(block.timestamp > p.submittedAt + validationTimeout, "AC: not yet expired");
+        p.status = ProposalStatus.Expired;
+        emit ProposalRejected(requestHash, "Expired");
     }
 
     function getVaultSnapshot()
@@ -300,20 +318,24 @@ contract AgentController is Ownable, ReentrancyGuard {
     function setAgentSigner(address _signer) external onlyOwner {
         require(_signer != address(0), "AC: zero address");
         agentSigner = _signer;
+        emit AgentSignerUpdated(_signer);
     }
 
     function setValidatorAddress(address _validator) external onlyOwner {
         require(_validator != address(0), "AC: zero address");
         validatorAddress = _validator;
+        emit ValidatorAddressUpdated(_validator);
     }
 
     function setMaxRebalanceBps(uint256 bps) external onlyOwner {
         require(bps <= 5000, "AC: max 50%");
         maxRebalanceBps = bps;
+        emit MaxRebalanceBpsUpdated(bps);
     }
 
     function setCooldown(uint256 seconds_) external onlyOwner {
         cooldownPeriod = seconds_;
+        emit CooldownPeriodUpdated(seconds_);
     }
 
     function updateAgentURI(string calldata newURI) external onlyOwner agentReady {

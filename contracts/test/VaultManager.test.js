@@ -193,8 +193,8 @@ describe("VaultManager", function () {
       await vaultManager.connect(investor).deposit(2, ethers.parseUnits("2000", USDT_DECIMALS));
     });
 
-    it("should return total liquidity", async function () {
-      const total = await vaultManager.getTotalLiquidity();
+    it("should return free liquidity", async function () {
+      const total = await vaultManager.getFreeLiquidity();
       expect(total).to.equal(ethers.parseUnits("10000", USDT_DECIMALS));
     });
 

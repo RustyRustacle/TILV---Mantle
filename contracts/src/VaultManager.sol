@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -24,6 +24,7 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
         uint256 minDeposit;
         uint256 maxRiskScore;
         uint256 advanceRate;
+        uint256 createdAt;
         bool isActive;
     }
 
@@ -79,6 +80,8 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
         _grantRole(UNPAUSER_ROLE, msg.sender);
         _grantRole(EMERGENCY_ADMIN_ROLE, msg.sender);
 
+        uint256 now_ = block.timestamp;
+
         vaults[VaultTier.PRIME] = Vault({
             tier: VaultTier.PRIME,
             totalDeposits: 0,
@@ -88,6 +91,7 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
             minDeposit: 1000 * 10**6,
             maxRiskScore: 30,
             advanceRate: 8000,
+            createdAt: now_,
             isActive: true
         });
 
@@ -100,6 +104,7 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
             minDeposit: 500 * 10**6,
             maxRiskScore: 60,
             advanceRate: 7500,
+            createdAt: now_,
             isActive: true
         });
 
@@ -112,6 +117,7 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
             minDeposit: 100 * 10**6,
             maxRiskScore: 100,
             advanceRate: 7000,
+            createdAt: now_,
             isActive: true
         });
     }
@@ -184,6 +190,11 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
         }
         pos.claimedReturns += yieldPortion;
 
+        if (vault.totalBadDebt > 0 && totalShares > 0) {
+            uint256 badDebtPortion = (vault.totalBadDebt * shares) / totalShares;
+            vault.totalBadDebt -= badDebtPortion;
+        }
+
         stablecoin.safeTransfer(msg.sender, withdrawAmount);
 
         emit VaultWithdrawal(msg.sender, tier, withdrawAmount, shares, yieldPortion);
@@ -236,7 +247,6 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
         } else {
             uint256 loss = fundedAmount - vaultReturn;
             vault.totalBadDebt += loss;
-            vault.totalDeposits -= loss;
             emit BadDebtWrittenOff(tier, loss);
         }
 
@@ -260,7 +270,6 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
 
         vault.totalAllocated -= fundedAmount;
         vault.totalBadDebt += fundedAmount;
-        vault.totalDeposits -= fundedAmount;
 
         emit BadDebtWrittenOff(tier, fundedAmount);
         emit InvoiceDefaulted(invoiceId, fundedAmount);
@@ -323,7 +332,6 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
     function getTotalShares(VaultTier tier) public view returns (uint256) {
         Vault memory v = vaults[tier];
         if (v.totalDeposits == 0) return 0;
-        if (v.totalDeposits + v.totalReturns <= v.totalBadDebt) return v.totalDeposits;
         return v.totalDeposits;
     }
 
@@ -358,15 +366,25 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
         if (depositBase > 0 && v.totalAllocated > 0) {
             utilization = (v.totalAllocated * BASIS_POINTS) / depositBase;
         }
-        if (v.totalReturns > 0 && v.totalDeposits > 0) {
-            currentApy = (v.totalReturns * BASIS_POINTS) / v.totalDeposits;
+        uint256 timeElapsed = block.timestamp - v.createdAt;
+        if (v.totalReturns > 0 && v.totalDeposits > 0 && timeElapsed > 0) {
+            currentApy = (v.totalReturns * BASIS_POINTS * 365 days) / (v.totalDeposits * timeElapsed);
         }
     }
 
-    function getTotalLiquidity() external view returns (uint256) {
+    function getFreeLiquidity() external view returns (uint256) {
         uint256 total;
         for (uint8 i = 0; i < 3; i++) {
             total += getTotalValue(VaultTier(i));
+        }
+        return total;
+    }
+
+    function getTotalAUM() external view returns (uint256) {
+        uint256 total;
+        for (uint8 i = 0; i < 3; i++) {
+            Vault memory v = vaults[VaultTier(i)];
+            total += v.totalDeposits + v.totalReturns;
         }
         return total;
     }
