@@ -27,6 +27,7 @@ const config = {
             invoiceNFT: process.env.INVOICE_NFT_ADDRESS || '',
             vaultManager: process.env.VAULT_MANAGER_ADDRESS || '',
             riskEngine: process.env.RISK_ENGINE_ADDRESS || '',
+            agentController: process.env.AGENT_CONTROLLER_ADDRESS || '',
             usdt: process.env.USDT_ADDRESS || '0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE'
         }
     },
@@ -52,7 +53,8 @@ const config = {
     // AI Service configuration
     ai: {
         serviceUrl: process.env.AI_SERVICE_URL || 'http://localhost:5000',
-        timeout: safeParseInt(process.env.AI_TIMEOUT, 60000)
+        timeout: safeParseInt(process.env.AI_TIMEOUT, 60000),
+        sharedSecret: process.env.AI_SHARED_SECRET || ''
     },
 
     // CORS configuration
@@ -70,7 +72,8 @@ const config = {
 
 export const validateConfig = (): void => {
     const requiredEnvVars = [
-        { key: 'PRIVATE_KEY', value: config.mantle.privateKey }
+        { key: 'PRIVATE_KEY', value: config.mantle.privateKey },
+        { key: 'JWT_SECRET', value: process.env.JWT_SECRET }
     ];
 
     const missing: string[] = [];
