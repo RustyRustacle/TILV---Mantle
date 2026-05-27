@@ -151,6 +151,7 @@ AGENT_CONTROLLER_ABI = json.loads("""
 """)
 
 # ── ERC-8004 Validation Registry ABI (minimal) ────────────────
+# Includes setResponse for MockValidationRegistry (hackathon use)
 VALIDATION_REGISTRY_ABI = json.loads("""
 [
   {
@@ -166,6 +167,16 @@ VALIDATION_REGISTRY_ABI = json.loads("""
       {"name": "tag",              "type": "string"},
       {"name": "lastUpdate",       "type": "uint256"}
     ]
+  },
+  {
+    "name": "setResponse",
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {"name": "requestHash", "type": "bytes32"},
+      {"name": "response",    "type": "uint8"}
+    ],
+    "outputs": []
   },
   {
     "name": "ValidationResponse",
@@ -458,6 +469,17 @@ def optimisation_cycle(w3: Web3, controller, validation, account):
     )
     tx_hash = send_tx(w3, account, submit_fn)
     log.info(f"Proposal submitted: {tx_hash}")
+
+    # Hackathon: call setResponse on MockValidationRegistry since
+    # its validationRequest() is a no-op. In production, a real
+    # zkML/TEE validator would call validationResponse() instead.
+    if validation is not None:
+        try:
+            set_fn = validation.functions.setResponse(request_hash, 100)
+            set_tx = send_tx(w3, account, set_fn)
+            log.info(f"Mock validator response set: {set_tx}")
+        except Exception as e:
+            log.warning(f"Could not set mock response: {e}")
 
     # Wait for ERC-8004 validation response
     log.info("Waiting for on-chain validation…")
