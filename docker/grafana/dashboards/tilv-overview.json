@@ -1,0 +1,51 @@
+{
+  "title": "TILV Overview",
+  "uid": "tilv-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "title": "HTTP Request Rate",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "P1479B5B1ECB1F3B1" },
+      "targets": [
+        {
+          "expr": "rate(tilv_http_request_duration_ms_count[5m])",
+          "legendFormat": "{{method}} {{route}}"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "title": "Request Duration (p99)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "P1479B5B1ECB1F3B1" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(tilv_http_request_duration_ms_bucket[5m]))",
+          "legendFormat": "p99"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "title": "Active Connections",
+      "type": "gauge",
+      "datasource": { "type": "prometheus", "uid": "P1479B5B1ECB1F3B1" },
+      "targets": [{ "expr": "tilv_active_connections" }],
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 }
+    },
+    {
+      "title": "Contract Calls per Method",
+      "type": "barchart",
+      "datasource": { "type": "prometheus", "uid": "P1479B5B1ECB1F3B1" },
+      "targets": [
+        {
+          "expr": "rate(tilv_contract_calls_total[5m])",
+          "legendFormat": "{{contract}}/{{method}}"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 6, "y": 8 }
+    }
+  ]
+}
