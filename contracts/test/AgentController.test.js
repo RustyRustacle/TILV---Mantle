@@ -3,22 +3,22 @@ const { ethers } = require("hardhat");
 
 describe("AgentController", function () {
   let agentController, vaultManager, riskEngine, owner, agentSigner, validatorAddr, user;
-  let mockIdentity, mockReputation, mockValidation;
+  let identityRegistry, reputationRegistry, validationRegistry;
 
   beforeEach(async function () {
     [owner, agentSigner, validatorAddr, user] = await ethers.getSigners();
 
-    const MockIdentity = await ethers.getContractFactory("MockIdentityRegistry");
-    mockIdentity = await MockIdentity.deploy();
-    await mockIdentity.waitForDeployment();
+    const IdentityFactory = await ethers.getContractFactory("IdentityRegistry");
+    identityRegistry = await IdentityFactory.deploy();
+    await identityRegistry.waitForDeployment();
 
-    const MockReputation = await ethers.getContractFactory("MockReputationRegistry");
-    mockReputation = await MockReputation.deploy();
-    await mockReputation.waitForDeployment();
+    const ReputationFactory = await ethers.getContractFactory("ReputationRegistry");
+    reputationRegistry = await ReputationFactory.deploy();
+    await reputationRegistry.waitForDeployment();
 
-    const MockValidation = await ethers.getContractFactory("MockValidationRegistry");
-    mockValidation = await MockValidation.deploy();
-    await mockValidation.waitForDeployment();
+    const ValidationFactory = await ethers.getContractFactory("ValidationRegistry");
+    validationRegistry = await ValidationFactory.deploy();
+    await validationRegistry.waitForDeployment();
 
     const Stablecoin = await ethers.getContractFactory("MockERC20");
     const stablecoin = await Stablecoin.deploy("USDT", "USDT", 6);
@@ -41,9 +41,9 @@ describe("AgentController", function () {
 
     const AgentController = await ethers.getContractFactory("AgentController");
     agentController = await AgentController.deploy(
-      await mockIdentity.getAddress(),
-      await mockReputation.getAddress(),
-      await mockValidation.getAddress(),
+      await identityRegistry.getAddress(),
+      await reputationRegistry.getAddress(),
+      await validationRegistry.getAddress(),
       await vaultManager.getAddress(),
       await riskEngine.getAddress(),
       validatorAddr.address,
@@ -96,7 +96,6 @@ describe("AgentController", function () {
     beforeEach(async function () {
       await agentController.connect(owner).registerAgent("ipfs://agent-uri");
 
-      // Deposit funds so vault has liquidity for the max rebalance check
       const stablecoin = await ethers.getContractAt("MockERC20",
         await vaultManager.stablecoin()
       );
@@ -187,9 +186,9 @@ describe("AgentController", function () {
     it("should reject proposal before agent registration", async function () {
       const AgentController = await ethers.getContractFactory("AgentController");
       const ac = await AgentController.deploy(
-        await mockIdentity.getAddress(),
-        await mockReputation.getAddress(),
-        await mockValidation.getAddress(),
+        await identityRegistry.getAddress(),
+        await reputationRegistry.getAddress(),
+        await validationRegistry.getAddress(),
         await vaultManager.getAddress(),
         await riskEngine.getAddress(),
         validatorAddr.address,
@@ -208,7 +207,6 @@ describe("AgentController", function () {
     beforeEach(async function () {
       await agentController.connect(owner).registerAgent("ipfs://agent-uri");
 
-      // Deposit funds so vault has liquidity
       const stablecoin = await ethers.getContractAt("MockERC20",
         await vaultManager.stablecoin()
       );
@@ -236,12 +234,39 @@ describe("AgentController", function () {
         fromTier, toTier, amount, nonce, "data:reasoning", requestHash
       );
 
-      // Set validation response to 100 (pass) in mock
-      await mockValidation.setResponse(requestHash, 100);
+      // Validator provides response through ValidationRegistry
+      await validationRegistry.connect(validatorAddr).validationResponse(
+        requestHash, 100, "", ethers.ZeroHash, "yield-optimization"
+      );
 
       await expect(
         agentController.connect(user).executeProposal(requestHash)
       ).to.emit(agentController, "ProposalExecuted");
+    });
+
+    it("should reject execution when validation score too low", async function () {
+      const fromTier = 0;
+      const toTier = 1;
+      const amount = ethers.parseUnits("1000", 6);
+      const nonce = 1;
+      const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["uint8", "uint8", "uint256", "uint256", "address"],
+        [fromTier, toTier, amount, nonce, agentSigner.address]
+      );
+      const requestHash = ethers.keccak256(encoded);
+
+      await agentController.connect(agentSigner).submitProposal(
+        fromTier, toTier, amount, nonce, "data:reasoning", requestHash
+      );
+
+      // Validator gives score 50 (below threshold of 70)
+      await validationRegistry.connect(validatorAddr).validationResponse(
+        requestHash, 50, "", ethers.ZeroHash, "yield-optimization"
+      );
+
+      await expect(
+        agentController.connect(user).executeProposal(requestHash)
+      ).to.be.revertedWith("AC: validation failed");
     });
 
     it("should reject execution of expired proposal", async function () {
