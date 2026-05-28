@@ -40,27 +40,27 @@ async function main() {
   const vaultManagerAddress = await vaultManager.getAddress();
   console.log("VaultManager deployed to:", vaultManagerAddress);
 
-  // 4. Deploy Mock ERC-8004 Registries (for hackathon)
-  console.log("\nDeploying MockIdentityRegistry...");
-  const MockIdentity = await ethers.getContractFactory("MockIdentityRegistry");
-  const mockIdentity = await MockIdentity.deploy();
-  await mockIdentity.waitForDeployment();
-  const identityRegistryAddress = await mockIdentity.getAddress();
-  console.log("MockIdentityRegistry deployed to:", identityRegistryAddress);
+  // 4. Deploy ERC-8004 Registries
+  console.log("\nDeploying IdentityRegistry...");
+  const IdentityRegistry = await ethers.getContractFactory("IdentityRegistry");
+  const identityRegistry = await IdentityRegistry.deploy();
+  await identityRegistry.waitForDeployment();
+  const identityRegistryAddress = await identityRegistry.getAddress();
+  console.log("IdentityRegistry deployed to:", identityRegistryAddress);
 
-  console.log("\nDeploying MockReputationRegistry...");
-  const MockReputation = await ethers.getContractFactory("MockReputationRegistry");
-  const mockReputation = await MockReputation.deploy();
-  await mockReputation.waitForDeployment();
-  const reputationRegistryAddress = await mockReputation.getAddress();
-  console.log("MockReputationRegistry deployed to:", reputationRegistryAddress);
+  console.log("\nDeploying ReputationRegistry...");
+  const ReputationRegistry = await ethers.getContractFactory("ReputationRegistry");
+  const reputationRegistry = await ReputationRegistry.deploy();
+  await reputationRegistry.waitForDeployment();
+  const reputationRegistryAddress = await reputationRegistry.getAddress();
+  console.log("ReputationRegistry deployed to:", reputationRegistryAddress);
 
-  console.log("\nDeploying MockValidationRegistry...");
-  const MockValidation = await ethers.getContractFactory("MockValidationRegistry");
-  const mockValidation = await MockValidation.deploy();
-  await mockValidation.waitForDeployment();
-  const validationRegistryAddress = await mockValidation.getAddress();
-  console.log("MockValidationRegistry deployed to:", validationRegistryAddress);
+  console.log("\nDeploying ValidationRegistry...");
+  const ValidationRegistry = await ethers.getContractFactory("ValidationRegistry");
+  const validationRegistry = await ValidationRegistry.deploy();
+  await validationRegistry.waitForDeployment();
+  const validationRegistryAddress = await validationRegistry.getAddress();
+  console.log("ValidationRegistry deployed to:", validationRegistryAddress);
 
   const validatorAddress = deployer.address;
 
@@ -115,14 +115,13 @@ async function main() {
       riskEngine: riskEngineAddress,
       vaultManager: vaultManagerAddress,
       agentController: agentControllerAddress,
-      mockIdentityRegistry: identityRegistryAddress,
-      mockReputationRegistry: reputationRegistryAddress,
-      mockValidationRegistry: validationRegistryAddress,
+      identityRegistry: identityRegistryAddress,
+      reputationRegistry: reputationRegistryAddress,
+      validationRegistry: validationRegistryAddress,
       usdt: USDT_ADDRESS
     },
     deployer: deployer.address,
     nextSteps: [
-      "For production: deploy real ERC-8004 registries",
       "For production: deploy real zkML/TEE validator",
       "Upload agent_registration.json to IPFS",
       "Update agent URI with IPFS CID",

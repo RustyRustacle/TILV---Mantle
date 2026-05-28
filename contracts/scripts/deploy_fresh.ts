@@ -11,17 +11,45 @@ async function main() {
 
   const USDT_ADDRESS = "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE";
 
-  // Reuse already-deployed mock registries
-  const identityRegistryAddress = "0xd1e1837A45c75a2e1Be2800f380950cCe373ad5a";
-  const reputationRegistryAddress = "0x4dE534158840Af1e8cFA1862F926F79FD772A519";
-  const validationRegistryAddress = "0xBA3530d53d2AabF2538Bf880dA4B8e74933567b6";
-
   console.log("Using USDT:", USDT_ADDRESS);
-  console.log("Using MockIdentityRegistry:", identityRegistryAddress);
-  console.log("Using MockReputationRegistry:", reputationRegistryAddress);
-  console.log("Using MockValidationRegistry:", validationRegistryAddress);
 
-  // 1. Deploy InvoiceNFT
+  // 1. Deploy IdentityRegistry
+  console.log("\nDeploying IdentityRegistry...");
+  const IdentityRegistry = await ethers.getContractFactory("IdentityRegistry");
+  const identityRegistry = await IdentityRegistry.deploy({
+    gasLimit: 2000000,
+    maxFeePerGas: ethers.parseUnits("60", "gwei"),
+    maxPriorityFeePerGas: ethers.parseUnits("0.1", "gwei"),
+  });
+  await identityRegistry.waitForDeployment();
+  const identityRegistryAddress = await identityRegistry.getAddress();
+  console.log("IdentityRegistry:", identityRegistryAddress);
+
+  // 2. Deploy ReputationRegistry
+  console.log("\nDeploying ReputationRegistry...");
+  const ReputationRegistry = await ethers.getContractFactory("ReputationRegistry");
+  const reputationRegistry = await ReputationRegistry.deploy({
+    gasLimit: 2000000,
+    maxFeePerGas: ethers.parseUnits("60", "gwei"),
+    maxPriorityFeePerGas: ethers.parseUnits("0.1", "gwei"),
+  });
+  await reputationRegistry.waitForDeployment();
+  const reputationRegistryAddress = await reputationRegistry.getAddress();
+  console.log("ReputationRegistry:", reputationRegistryAddress);
+
+  // 3. Deploy ValidationRegistry
+  console.log("\nDeploying ValidationRegistry...");
+  const ValidationRegistry = await ethers.getContractFactory("ValidationRegistry");
+  const validationRegistry = await ValidationRegistry.deploy({
+    gasLimit: 2000000,
+    maxFeePerGas: ethers.parseUnits("60", "gwei"),
+    maxPriorityFeePerGas: ethers.parseUnits("0.1", "gwei"),
+  });
+  await validationRegistry.waitForDeployment();
+  const validationRegistryAddress = await validationRegistry.getAddress();
+  console.log("ValidationRegistry:", validationRegistryAddress);
+
+  // 4. Deploy InvoiceNFT
   console.log("\nDeploying InvoiceNFT...");
   const InvoiceNFT = await ethers.getContractFactory("InvoiceNFT");
   const invoiceNFT = await InvoiceNFT.deploy({
@@ -33,7 +61,7 @@ async function main() {
   const invoiceNFTAddress = await invoiceNFT.getAddress();
   console.log("InvoiceNFT:", invoiceNFTAddress);
 
-  // 2. Deploy RiskEngine
+  // 5. Deploy RiskEngine
   console.log("\nDeploying RiskEngine...");
   const RiskEngine = await ethers.getContractFactory("RiskEngine");
   const riskEngine = await RiskEngine.deploy({
@@ -45,7 +73,7 @@ async function main() {
   const riskEngineAddress = await riskEngine.getAddress();
   console.log("RiskEngine:", riskEngineAddress);
 
-  // 3. Deploy VaultManager (needs ~4M gas on Mantle)
+  // 6. Deploy VaultManager (needs ~4M gas on Mantle)
   console.log("\nDeploying VaultManager...");
   const VMFactory = await ethers.getContractFactory("VaultManager");
   const vaultManager = await VMFactory.deploy(USDT_ADDRESS, invoiceNFTAddress, {
@@ -60,7 +88,7 @@ async function main() {
   const validatorAddress = deployer.address;
   const agentSigner = deployer.address;
 
-  // 4. Deploy AgentController
+  // 7. Deploy AgentController
   console.log("\nDeploying AgentController...");
   const AgentController = await ethers.getContractFactory("AgentController");
   const agentController = await AgentController.deploy(
@@ -81,7 +109,7 @@ async function main() {
   const agentControllerAddress = await agentController.getAddress();
   console.log("AgentController:", agentControllerAddress);
 
-  // 5. Grant roles on InvoiceNFT
+  // 8. Grant roles on InvoiceNFT
   console.log("\nConfiguring InvoiceNFT roles...");
   const MINTER_ROLE = await invoiceNFT.MINTER_ROLE();
   let tx = await invoiceNFT.grantRole(MINTER_ROLE, vaultManagerAddress);
@@ -93,14 +121,14 @@ async function main() {
   await tx.wait();
   console.log("Granted VALIDATOR_ROLE to VaultManager");
 
-  // 6. Grant AGENT_ROLE to AgentController on VaultManager
+  // 9. Grant AGENT_ROLE to AgentController on VaultManager
   console.log("\nGranting AGENT_ROLE to AgentController...");
   const AGENT_ROLE = ethers.keccak256(ethers.toUtf8Bytes("AGENT_ROLE"));
   tx = await vaultManager.grantRole(AGENT_ROLE, agentControllerAddress);
   await tx.wait();
   console.log("AGENT_ROLE granted to AgentController");
 
-  // 7. Register agent
+  // 10. Register agent
   console.log("\nRegistering agent...");
   const agentURI = "data:application/json," + JSON.stringify({
     name: "TILV Yield Optimizer",
@@ -113,7 +141,7 @@ async function main() {
   await tx.wait();
   console.log("Agent registered");
 
-  // 8. Save deployment info
+  // 11. Save deployment info
   const deploymentInfo = {
     network: network,
     deployedAt: new Date().toISOString(),
@@ -122,9 +150,9 @@ async function main() {
       riskEngine: riskEngineAddress,
       vaultManager: vaultManagerAddress,
       agentController: agentControllerAddress,
-      mockIdentityRegistry: identityRegistryAddress,
-      mockReputationRegistry: reputationRegistryAddress,
-      mockValidationRegistry: validationRegistryAddress,
+      identityRegistry: identityRegistryAddress,
+      reputationRegistry: reputationRegistryAddress,
+      validationRegistry: validationRegistryAddress,
       usdt: USDT_ADDRESS
     },
     deployer: deployer.address,

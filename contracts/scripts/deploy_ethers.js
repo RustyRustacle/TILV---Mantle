@@ -13,37 +13,53 @@ async function main() {
   console.log("Deployer:", wallet.address);
   console.log("Balance:", ethers.formatEther(await provider.getBalance(wallet.address)), "MNT\n");
 
-  // Reuse existing mock registries
-  const identityRegistryAddress = "0xd1e1837A45c75a2e1Be2800f380950cCe373ad5a";
-  const reputationRegistryAddress = "0x4dE534158840Af1e8cFA1862F926F79FD772A519";
-  const validationRegistryAddress = "0xBA3530d53d2AabF2538Bf880dA4B8e74933567b6";
-
   function load(name) {
     return JSON.parse(fs.readFileSync(`./artifacts/src/${name}.sol/${name}.json`, "utf8"));
   }
 
-  // 1. InvoiceNFT
+  // 1. Deploy IdentityRegistry
+  console.log("Deploying IdentityRegistry...");
+  const identityRegistry = await new ethers.ContractFactory(load("IdentityRegistry").abi, load("IdentityRegistry").bytecode, wallet).deploy();
+  await identityRegistry.waitForDeployment();
+  const identityRegistryAddress = await identityRegistry.getAddress();
+  console.log("IdentityRegistry:", identityRegistryAddress);
+
+  // 2. Deploy ReputationRegistry
+  console.log("\nDeploying ReputationRegistry...");
+  const reputationRegistry = await new ethers.ContractFactory(load("ReputationRegistry").abi, load("ReputationRegistry").bytecode, wallet).deploy();
+  await reputationRegistry.waitForDeployment();
+  const reputationRegistryAddress = await reputationRegistry.getAddress();
+  console.log("ReputationRegistry:", reputationRegistryAddress);
+
+  // 3. Deploy ValidationRegistry
+  console.log("\nDeploying ValidationRegistry...");
+  const validationRegistry = await new ethers.ContractFactory(load("ValidationRegistry").abi, load("ValidationRegistry").bytecode, wallet).deploy();
+  await validationRegistry.waitForDeployment();
+  const validationRegistryAddress = await validationRegistry.getAddress();
+  console.log("ValidationRegistry:", validationRegistryAddress);
+
+  // 4. InvoiceNFT
   console.log("Deploying InvoiceNFT...");
   const invoiceNFT = await new ethers.ContractFactory(load("InvoiceNFT").abi, load("InvoiceNFT").bytecode, wallet).deploy();
   await invoiceNFT.waitForDeployment();
   const invoiceNFTAddress = await invoiceNFT.getAddress();
   console.log("InvoiceNFT:", invoiceNFTAddress);
 
-  // 2. RiskEngine
+  // 5. RiskEngine
   console.log("\nDeploying RiskEngine...");
   const riskEngine = await new ethers.ContractFactory(load("RiskEngine").abi, load("RiskEngine").bytecode, wallet).deploy();
   await riskEngine.waitForDeployment();
   const riskEngineAddress = await riskEngine.getAddress();
   console.log("RiskEngine:", riskEngineAddress);
 
-  // 3. VaultManager
+  // 6. VaultManager
   console.log("\nDeploying VaultManager...");
   const vaultManager = await new ethers.ContractFactory(load("VaultManager").abi, load("VaultManager").bytecode, wallet).deploy(USDT, invoiceNFTAddress);
   await vaultManager.waitForDeployment();
   const vaultManagerAddress = await vaultManager.getAddress();
   console.log("VaultManager:", vaultManagerAddress);
 
-  // 4. AgentController
+  // 7. AgentController
   console.log("\nDeploying AgentController...");
   const agentController = await new ethers.ContractFactory(load("AgentController").abi, load("AgentController").bytecode, wallet).deploy(
     identityRegistryAddress,
@@ -58,7 +74,7 @@ async function main() {
   const agentControllerAddress = await agentController.getAddress();
   console.log("AgentController:", agentControllerAddress);
 
-  // 5. Grant MINTER_ROLE + VALIDATOR_ROLE on InvoiceNFT to VaultManager
+  // 8. Grant MINTER_ROLE + VALIDATOR_ROLE on InvoiceNFT to VaultManager
   console.log("\nConfiguring roles...");
   const inv = new ethers.Contract(invoiceNFTAddress, load("InvoiceNFT").abi, wallet);
   const MINTER_ROLE = await inv.MINTER_ROLE();
@@ -71,14 +87,14 @@ async function main() {
   await tx.wait();
   console.log("VALIDATOR_ROLE granted");
 
-  // 6. Grant AGENT_ROLE to AgentController
+  // 9. Grant AGENT_ROLE to AgentController
   const vm = new ethers.Contract(vaultManagerAddress, load("VaultManager").abi, wallet);
   const AGENT_ROLE = ethers.keccak256(ethers.toUtf8Bytes("AGENT_ROLE"));
   tx = await vm.grantRole(AGENT_ROLE, agentControllerAddress);
   await tx.wait();
   console.log("AGENT_ROLE granted to AgentController");
 
-  // 7. Register agent
+  // 10. Register agent
   const ac = new ethers.Contract(agentControllerAddress, load("AgentController").abi, wallet);
   const agentURI = "data:application/json," + JSON.stringify({
     name: "TILV Yield Optimizer",
@@ -91,7 +107,7 @@ async function main() {
   await tx.wait();
   console.log("Agent registered");
 
-  // 8. Save deployment info
+  // 11. Save deployment info
   const info = {
     network: "mantleMainnet",
     deployedAt: new Date().toISOString(),
@@ -100,9 +116,9 @@ async function main() {
       riskEngine: riskEngineAddress,
       vaultManager: vaultManagerAddress,
       agentController: agentControllerAddress,
-      mockIdentityRegistry: identityRegistryAddress,
-      mockReputationRegistry: reputationRegistryAddress,
-      mockValidationRegistry: validationRegistryAddress,
+      identityRegistry: identityRegistryAddress,
+      reputationRegistry: reputationRegistryAddress,
+      validationRegistry: validationRegistryAddress,
       usdt: USDT,
     },
     deployer: wallet.address,

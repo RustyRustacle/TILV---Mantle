@@ -17,29 +17,29 @@ async function main() {
   console.log("Existing VaultManager:", vaultManagerAddress);
   console.log("Existing RiskEngine:", riskEngineAddress);
 
-  // 1. Deploy MockIdentityRegistry
-  console.log("\nDeploying MockIdentityRegistry...");
-  const MockIdentity = await ethers.getContractFactory("MockIdentityRegistry");
-  const mockIdentity = await MockIdentity.deploy();
-  await mockIdentity.waitForDeployment();
-  const identityRegistryAddress = await mockIdentity.getAddress();
-  console.log("MockIdentityRegistry:", identityRegistryAddress);
+  // 1. Deploy IdentityRegistry
+  console.log("\nDeploying IdentityRegistry...");
+  const IdentityRegistry = await ethers.getContractFactory("IdentityRegistry");
+  const identityRegistry = await IdentityRegistry.deploy();
+  await identityRegistry.waitForDeployment();
+  const identityRegistryAddress = await identityRegistry.getAddress();
+  console.log("IdentityRegistry:", identityRegistryAddress);
 
-  // 2. Deploy MockReputationRegistry
-  console.log("\nDeploying MockReputationRegistry...");
-  const MockReputation = await ethers.getContractFactory("MockReputationRegistry");
-  const mockReputation = await MockReputation.deploy();
-  await mockReputation.waitForDeployment();
-  const reputationRegistryAddress = await mockReputation.getAddress();
-  console.log("MockReputationRegistry:", reputationRegistryAddress);
+  // 2. Deploy ReputationRegistry
+  console.log("\nDeploying ReputationRegistry...");
+  const ReputationRegistry = await ethers.getContractFactory("ReputationRegistry");
+  const reputationRegistry = await ReputationRegistry.deploy();
+  await reputationRegistry.waitForDeployment();
+  const reputationRegistryAddress = await reputationRegistry.getAddress();
+  console.log("ReputationRegistry:", reputationRegistryAddress);
 
-  // 3. Deploy MockValidationRegistry
-  console.log("\nDeploying MockValidationRegistry...");
-  const MockValidation = await ethers.getContractFactory("MockValidationRegistry");
-  const mockValidation = await MockValidation.deploy();
-  await mockValidation.waitForDeployment();
-  const validationRegistryAddress = await mockValidation.getAddress();
-  console.log("MockValidationRegistry:", validationRegistryAddress);
+  // 3. Deploy ValidationRegistry
+  console.log("\nDeploying ValidationRegistry...");
+  const ValidationRegistry = await ethers.getContractFactory("ValidationRegistry");
+  const validationRegistry = await ValidationRegistry.deploy();
+  await validationRegistry.waitForDeployment();
+  const validationRegistryAddress = await validationRegistry.getAddress();
+  console.log("ValidationRegistry:", validationRegistryAddress);
 
   const validatorAddress = deployer.address;
 
@@ -109,9 +109,9 @@ async function main() {
     network: network,
     deployedAt: new Date().toISOString(),
     contracts: {
-      mockIdentityRegistry: identityRegistryAddress,
-      mockReputationRegistry: reputationRegistryAddress,
-      mockValidationRegistry: validationRegistryAddress,
+      identityRegistry: identityRegistryAddress,
+      reputationRegistry: reputationRegistryAddress,
+      validationRegistry: validationRegistryAddress,
       agentController: agentControllerAddress,
     },
     existingContracts: {
