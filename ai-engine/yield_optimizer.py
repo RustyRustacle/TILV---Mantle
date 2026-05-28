@@ -151,7 +151,6 @@ AGENT_CONTROLLER_ABI = json.loads("""
 """)
 
 # ── ERC-8004 Validation Registry ABI (minimal) ────────────────
-# Includes setResponse for MockValidationRegistry (hackathon use)
 VALIDATION_REGISTRY_ABI = json.loads("""
 [
   {
@@ -169,17 +168,7 @@ VALIDATION_REGISTRY_ABI = json.loads("""
     ]
   },
   {
-    "name": "setResponse",
-    "type": "function",
-    "stateMutability": "nonpayable",
-    "inputs": [
-      {"name": "requestHash", "type": "bytes32"},
-      {"name": "response",    "type": "uint8"}
-    ],
-    "outputs": []
-  },
-  {
-    "name": "ValidationResponse",
+    "name": "ValidationResponded",
     "type": "event",
     "inputs": [
       {"name": "validatorAddress", "type": "address",  "indexed": true},
@@ -361,23 +350,33 @@ def send_tx(w3: Web3, account, contract_fn) -> str:
 
 
 # ── Validation poller ──────────────────────────────────────────
-def wait_for_validation(validation, request_hash: bytes,
+def wait_for_validation(w3: Web3, validation, request_hash: bytes,
                         timeout_s: int = 1800,
                         poll_s: int = 15) -> bool:
     """
-    Poll the Validation Registry until a response arrives or timeout.
-    Returns True if response >= 70 (pass threshold).
+    Poll the Validation Registry for a ValidationResponded event matching
+    the given request_hash. Returns True if response >= 70 (pass threshold).
     """
     if validation is None:
         log.warning("No ValidationRegistry configured – skipping validation wait")
         return True
 
+    event_signature = w3.keccak(
+        "ValidationResponded(address,uint256,bytes32,uint8,string,bytes32,string)"
+    )
+
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         try:
-            (_, _, response, _, _, last_update) = \
-                validation.functions.getValidationStatus(request_hash).call()
-            if last_update > 0:
+            logs = w3.eth.get_logs({
+                "address":  validation.address,
+                "fromBlock": w3.eth.block_number - 100,
+                "toBlock":   "latest",
+                "topics":    [event_signature, None, None, request_hash]
+            })
+            if logs:
+                decoded = validation.events.ValidationResponded().process_log(logs[-1])
+                response = decoded["args"]["response"]
                 log.info(f"Validation response: {response}/100 (threshold: {VALIDATION_THRESHOLD})")
                 return response >= VALIDATION_THRESHOLD
         except Exception as e:
@@ -470,20 +469,10 @@ def optimisation_cycle(w3: Web3, controller, validation, account):
     tx_hash = send_tx(w3, account, submit_fn)
     log.info(f"Proposal submitted: {tx_hash}")
 
-    # Hackathon: call setResponse on MockValidationRegistry since
-    # its validationRequest() is a no-op. In production, a real
-    # zkML/TEE validator would call validationResponse() instead.
-    if validation is not None:
-        try:
-            set_fn = validation.functions.setResponse(request_hash, 100)
-            set_tx = send_tx(w3, account, set_fn)
-            log.info(f"Mock validator response set: {set_tx}")
-        except Exception as e:
-            log.warning(f"Could not set mock response: {e}")
-
-    # Wait for ERC-8004 validation response
+    # Wait for ERC-8004 validation response (emitted by ValidationRegistry)
     log.info("Waiting for on-chain validation…")
     validated = wait_for_validation(
+        w3,
         validation,
         request_hash,
         timeout_s=int(controller.functions.validationTimeout().call())
