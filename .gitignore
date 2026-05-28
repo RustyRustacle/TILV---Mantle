@@ -15,7 +15,6 @@ logs/
 temp/
 deployment.json
 
-# Ignore all markdown files except README.md and setup.md
+# Ignore all markdown files except README.md
 *.md
 !**/README.md
-!setup.md
