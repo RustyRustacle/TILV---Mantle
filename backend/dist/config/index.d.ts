@@ -1,14 +1,15 @@
-declare const _default: {
+declare const config: {
     port: number;
     nodeEnv: string;
     mantle: {
         rpcUrl: string;
         chainId: number;
-        privateKey: string;
+        readonly privateKey: string;
         contracts: {
             invoiceNFT: string;
             vaultManager: string;
             riskEngine: string;
+            agentController: string;
             usdt: string;
         };
     };
@@ -26,7 +27,6 @@ declare const _default: {
     };
     cors: {
         origin: string;
-        credentials: boolean;
     };
     upload: {
         maxFileSize: number;
@@ -34,5 +34,6 @@ declare const _default: {
         uploadPath: string;
     };
 };
-export default _default;
+export declare const validateConfig: () => void;
+export default config;
 //# sourceMappingURL=index.d.ts.map

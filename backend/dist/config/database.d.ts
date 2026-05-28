@@ -1,4 +1,6 @@
+import { createClient } from 'redis';
 export declare const connectMongoDB: () => Promise<void>;
+export declare let redisClient: ReturnType<typeof createClient> | null;
 export declare const connectRedis: () => Promise<import("@redis/client").RedisClientType<{
     graph: {
         CONFIG_GET: typeof import("@redis/graph/dist/commands/CONFIG_GET");
