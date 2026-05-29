@@ -1,0 +1,35 @@
+export const INVOICE_NFT_ABI = [
+  {
+    type: 'function',
+    name: 'getInvoice',
+    stateMutability: 'view',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    outputs: [
+      { name: 'borrower', type: 'address' },
+      { name: 'buyer', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+      { name: 'dueDate', type: 'uint256' },
+      { name: 'advanceRate', type: 'uint256' },
+      { name: 'riskScore', type: 'uint256' },
+      { name: 'status', type: 'uint8' },
+      { name: 'fundedAmount', type: 'uint256' },
+      { name: 'createdAt', type: 'uint256' },
+      { name: 'validationHash', type: 'bytes32' },
+      { name: 'metadataURI', type: 'string' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'totalSupply',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'ownerOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'address' }],
+  },
+] as const

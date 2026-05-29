@@ -1,6 +1,28 @@
 export const VAULT_MANAGER_ABI = [
   {
     type: 'function',
+    name: 'deposit',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'tier', type: 'uint8' },
+      { name: 'amount', type: 'uint256' },
+      { name: 'minShares', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'withdraw',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'tier', type: 'uint8' },
+      { name: 'shares', type: 'uint256' },
+      { name: 'minAmountOut', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
     name: 'getVaultState',
     stateMutability: 'view',
     inputs: [{ name: 'tier', type: 'uint8' }],
@@ -29,7 +51,7 @@ export const VAULT_MANAGER_ABI = [
   },
   {
     type: 'function',
-    name: 'getTotalLiquidity',
+    name: 'getFreeLiquidity',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ name: '', type: 'uint256' }],
@@ -48,5 +70,19 @@ export const VAULT_MANAGER_ABI = [
       { name: 'depositTimestamp', type: 'uint256' },
       { name: 'claimedReturns', type: 'uint256' },
     ],
+  },
+  {
+    type: 'function',
+    name: 'getAvailableLiquidity',
+    stateMutability: 'view',
+    inputs: [{ name: 'tier', type: 'uint8' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'getTotalAUM',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
   },
 ] as const
