@@ -7,6 +7,101 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { ShieldCheck, Zap, Coins, ArrowRight, Wallet, ChevronRight, Activity, Cpu } from 'lucide-react'
 import { useRef } from 'react'
+import { useReadContract } from 'wagmi'
+import { VAULT_MANAGER_ABI } from '@/lib/vaultManager.abi'
+import { formatUnits } from 'viem'
+
+const VAULT_MANAGER_ADDRESS = process.env.NEXT_PUBLIC_VAULT_MANAGER_ADDRESS as `0x${string}`
+const STABLECOIN_DECIMALS = 6
+const BASIS_POINTS = 10000
+
+function formatCurrency(value: bigint, decimals: number): string {
+  const formatted = formatUnits(value, decimals)
+  const num = parseFloat(formatted)
+  if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(2)}M`
+  if (num >= 1_000) return `$${(num / 1_000).toFixed(2)}K`
+  return `$${num.toFixed(2)}`
+}
+
+function HeroStats() {
+  const { data: vault0 } = useReadContract({
+    address: VAULT_MANAGER_ADDRESS,
+    abi: VAULT_MANAGER_ABI,
+    functionName: 'getVault',
+    args: [0],
+    query: { enabled: !!VAULT_MANAGER_ADDRESS },
+  })
+  const { data: vault1 } = useReadContract({
+    address: VAULT_MANAGER_ADDRESS,
+    abi: VAULT_MANAGER_ABI,
+    functionName: 'getVault',
+    args: [1],
+    query: { enabled: !!VAULT_MANAGER_ADDRESS },
+  })
+  const { data: vault2 } = useReadContract({
+    address: VAULT_MANAGER_ADDRESS,
+    abi: VAULT_MANAGER_ABI,
+    functionName: 'getVault',
+    args: [2],
+    query: { enabled: !!VAULT_MANAGER_ADDRESS },
+  })
+  const { data: aum } = useReadContract({
+    address: VAULT_MANAGER_ADDRESS,
+    abi: VAULT_MANAGER_ABI,
+    functionName: 'getTotalAUM',
+    query: { enabled: !!VAULT_MANAGER_ADDRESS },
+  })
+
+  const totalAum = aum ?? BigInt(0)
+  const totalDepositsAll = (vault0?.[1] ?? BigInt(0)) + (vault1?.[1] ?? BigInt(0)) + (vault2?.[1] ?? BigInt(0))
+  const totalBadDebt = (vault0?.[4] ?? BigInt(0)) + (vault1?.[4] ?? BigInt(0)) + (vault2?.[4] ?? BigInt(0))
+  const vaultCount = [vault0, vault1, vault2].filter(v => v !== undefined).length
+
+  return (
+    <section className="relative z-20 py-10 px-6 -mt-10">
+      <div className="max-w-6xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8 }}
+          className="glass-card rounded-3xl p-8 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+        >
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 divide-x divide-white/10 text-center">
+            <div className="px-4 flex flex-col justify-center">
+              <div className="text-4xl font-black text-white mb-2 tracking-tight">
+                {totalAum > BigInt(0) ? formatCurrency(totalAum, STABLECOIN_DECIMALS) : '$0'}
+              </div>
+              <div className="text-sm font-medium text-mantle-green mb-1 uppercase tracking-wider">Total AUM</div>
+              <div className="text-xs text-gray-500">Across all vaults</div>
+            </div>
+            <div className="px-4 flex flex-col justify-center">
+              <div className="text-4xl font-black text-white mb-2 tracking-tight">
+                {totalBadDebt > BigInt(0) ? '100%' : '0%'}
+              </div>
+              <div className="text-sm font-medium text-mantle-green mb-1 uppercase tracking-wider">Default Rate</div>
+              <div className="text-xs text-gray-500">On-chain history</div>
+            </div>
+            <div className="px-4 flex flex-col justify-center">
+              <div className="text-4xl font-black text-white mb-2 tracking-tight">
+                {vaultCount > 0 ? `${vaultCount}` : '0'}
+              </div>
+              <div className="text-sm font-medium text-mantle-green mb-1 uppercase tracking-wider">Active Vaults</div>
+              <div className="text-xs text-gray-500">Risk-tiered pools</div>
+            </div>
+            <div className="px-4 flex flex-col justify-center">
+              <div className="text-4xl font-black text-white mb-2 tracking-tight">
+                {totalDepositsAll > BigInt(0) ? formatCurrency(totalDepositsAll, STABLECOIN_DECIMALS) : '$0'}
+              </div>
+              <div className="text-sm font-medium text-mantle-green mb-1 uppercase tracking-wider">Total Deposits</div>
+              <div className="text-xs text-gray-500">Investor capital</div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  )
+}
 
 export default function Home() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -20,12 +115,9 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen font-sans" ref={containerRef}>
-
-      {/* Dynamic Backgrounds */}
       <div className="fixed top-0 left-0 w-full h-[800px] bg-mantle-green/5 blur-[200px] -z-10 rounded-full mix-blend-screen pointer-events-none" />
       <div className="fixed bottom-0 right-0 w-[600px] h-[600px] bg-cyan-900/10 blur-[200px] -z-10 rounded-full mix-blend-screen pointer-events-none" />
 
-      {/* Hero Section */}
       <section className="relative pt-32 pb-32 px-6 overflow-hidden">
         <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] -z-10 opacity-20"></div>
 
@@ -40,7 +132,7 @@ export default function Home() {
             className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full border border-mantle-green/30 bg-mantle-darker/60 backdrop-blur-md text-mantle-green text-sm font-semibold mb-10 shadow-[0_0_20px_rgba(0,220,130,0.1)]"
           >
             <Zap className="w-4 h-4 animate-pulse" />
-            <span className="tracking-wide uppercase text-xs">Unlocking Web3 Real World Assets</span>
+            <span className="tracking-wide uppercase text-xs">RealFi on Mantle Network</span>
           </motion.div>
 
           <motion.h1
@@ -50,7 +142,7 @@ export default function Home() {
             className="text-6xl md:text-8xl font-black tracking-tighter mb-8 leading-[1.1]"
           >
             <span className="text-white drop-shadow-2xl">Instant Liquidity.</span><br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-mantle-green via-[#00fdf0] to-mantle-green animate-gradient-x">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-mantle-green via-[#00fdf0] to-mantle-green">
               For SME Invoices
             </span>
           </motion.h1>
@@ -86,36 +178,9 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* Hero Stats */}
-      <section className="relative z-20 py-10 px-6 -mt-10">
-        <div className="max-w-6xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
-            className="glass-card rounded-3xl p-8 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
-          >
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 divide-x divide-white/10 text-center">
-              {[
-                { label: "Total Funded", value: "$2.4M+", trend: "+12.5% this month" },
-                { label: "SMEs Supported", value: "250+", trend: "Nationwide" },
-                { label: "Investor APY", value: "15%", trend: "Stablecoin Yield" },
-                { label: "Avg. Funding Time", value: "< 24h", trend: "Automated via Smart Contract" }
-              ].map((stat, i) => (
-                <div key={i} className="px-4 flex flex-col justify-center">
-                  <div className="text-4xl font-black text-white mb-2 tracking-tight">{stat.value}</div>
-                  <div className="text-sm font-medium text-mantle-green mb-1 uppercase tracking-wider">{stat.label}</div>
-                  <div className="text-xs text-gray-500">{stat.trend}</div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-      </section>
+      <HeroStats />
 
-      {/* Features Infrastructure */}
-      <section id="features" className="py-32 px-6 relative">
+      <section className="py-32 px-6 relative">
         <div className="max-w-7xl mx-auto">
           <div className="mb-20">
             <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">
@@ -169,8 +234,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Interactive Vault Dashboard Preview */}
-      <section id="investor" className="py-24 px-6 overflow-hidden bg-black relative border-y border-white/10">
+      <section className="py-24 px-6 overflow-hidden bg-black relative border-y border-white/10">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(0,220,130,0.05),rgba(0,0,0,1))] pointer-events-none" />
 
         <div className="max-w-7xl mx-auto relative z-10">
@@ -217,7 +281,6 @@ export default function Home() {
               transition={{ duration: 1, type: "spring" }}
               className="relative perspective-1000"
             >
-              {/* Premium Glow effect behind card */}
               <div className="absolute inset-0 bg-gradient-to-r from-mantle-green via-cyan-400 to-blue-500 blur-3xl opacity-20 transform scale-90" />
 
               <Card className="relative border-white/10 bg-[#0A0A0A]/90 backdrop-blur-2xl p-8 rounded-3xl shadow-[0_30px_60px_rgba(0,0,0,0.8)]">
@@ -225,41 +288,27 @@ export default function Home() {
                   <div>
                     <h4 className="font-bold text-2xl text-white mb-2 tracking-tight">Prime Liquid Vault</h4>
                     <span className="px-3 py-1 rounded-full bg-mantle-green/10 text-mantle-green text-sm font-semibold border border-mantle-green/20">
-                      Tier 1 • Risk: Very Low
+                      Tier 1 Risk: Very Low
                     </span>
                   </div>
                   <div className="text-right">
                     <div className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-500">12.5%</div>
-                    <div className="text-sm text-gray-400 mt-1 uppercase tracking-wider font-semibold">Fixed APY</div>
+                    <div className="text-sm text-gray-400 mt-1 uppercase tracking-wider font-semibold">Target APY</div>
                   </div>
                 </div>
 
                 <div className="space-y-8">
-                  <div className="bg-white/5 rounded-2xl p-6 border border-white/5">
-                    <div className="flex justify-between text-sm mb-4">
-                      <span className="text-gray-400 font-medium">Vault Capacity Filled</span>
-                      <span className="text-white font-mono font-bold">$850,000 / $1,000,000</span>
-                    </div>
-                    <div className="h-3 w-full bg-black rounded-full overflow-hidden border border-white/10">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        whileInView={{ width: "85%" }}
-                        transition={{ duration: 1.5, delay: 0.5 }}
-                        className="h-full bg-gradient-to-r from-mantle-green to-emerald-300 relative"
-                      >
-                        <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.4)_50%,transparent_100%)] w-full h-full animate-[shimmer_2s_infinite]" />
-                      </motion.div>
-                    </div>
-                  </div>
-
                   <div className="flex gap-4">
-                    <Button className="w-full h-14 text-lg bg-mantle-green hover:bg-emerald-400 text-black border-none font-bold" variant="solid">Deposit USDC</Button>
-                    <Button className="w-full h-14 text-lg border-white/20 text-white hover:bg-white/10" variant="outline">View Details</Button>
+                    <Link href="/investor" className="w-full">
+                      <Button className="w-full h-14 text-lg bg-mantle-green hover:bg-emerald-400 text-black border-none font-bold">Deposit USDC</Button>
+                    </Link>
+                    <Link href="/investor" className="w-full">
+                      <Button className="w-full h-14 text-lg border-white/20 text-white hover:bg-white/10" variant="outline">View Details</Button>
+                    </Link>
                   </div>
                 </div>
               </Card>
 
-              {/* Floating element 2 */}
               <motion.div
                 animate={{ y: [-15, 15, -15], x: [0, 5, 0] }}
                 transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
@@ -271,8 +320,8 @@ export default function Home() {
                       <Coins className="w-6 h-6 text-black" />
                     </div>
                     <div>
-                      <div className="text-xs text-gray-400 uppercase tracking-widest font-semibold mb-1">Today's Yield</div>
-                      <div className="font-bold text-white text-xl">+$42.50 USDC</div>
+                      <div className="text-xs text-gray-400 uppercase tracking-widest font-semibold mb-1">Live on Mantle</div>
+                      <div className="font-bold text-white text-xl">Invoice Financing</div>
                     </div>
                   </div>
                 </Card>
@@ -282,7 +331,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer */}
       <footer className="py-12 border-t border-white/10 text-center px-6 bg-[#030303] relative z-10">
         <div className="flex items-center justify-center gap-3 mb-8">
           <Image src="/logo.png" alt="TILV" width={32} height={32} className="rounded-lg" />

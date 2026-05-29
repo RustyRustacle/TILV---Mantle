@@ -4,8 +4,8 @@ import { motion } from 'framer-motion'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { WalletGate } from '@/components/ui/WalletGate'
-import { Upload, FileText, CheckCircle, AlertCircle, X } from 'lucide-react'
-import React, { useRef, useState, DragEvent, ChangeEvent } from 'react'
+import { Upload, FileText, CheckCircle, AlertCircle, X, Clock, DollarSign } from 'lucide-react'
+import React, { useRef, useState, useEffect, DragEvent, ChangeEvent } from 'react'
 import { useSignMessage, useAccount } from 'wagmi'
 import axios from 'axios'
 
@@ -34,10 +34,28 @@ interface UploadResponse {
     risk_score: RiskResult
 }
 
+interface InvoiceRecord {
+    _id: string;
+    tokenId?: number;
+    amount: number;
+    currency: string;
+    riskScore?: number;
+    riskTier?: string;
+    status: string;
+    createdAt: string;
+}
+
 const TIER_MAP: Record<string, { name: string; apy: string; advance: string; color: string }> = {
     LOW: { name: 'Prime Vault', apy: '4–6%', advance: '80%', color: 'text-blue-400' },
     MEDIUM: { name: 'Growth Vault', apy: '8–12%', advance: '75%', color: 'text-mantle-green' },
     HIGH: { name: 'Emerging Vault', apy: '15–25%', advance: '70%', color: 'text-purple-400' },
+}
+
+const STATUS_MAP: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+    pending: { label: 'AI Verification', color: 'text-yellow-500', icon: <Clock className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" /> },
+    funded: { label: 'Funded', color: 'text-mantle-green', icon: <CheckCircle className="w-5 h-5 text-mantle-green shrink-0 mt-0.5" /> },
+    repaid: { label: 'Repaid', color: 'text-blue-400', icon: <CheckCircle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" /> },
+    defaulted: { label: 'Defaulted', color: 'text-red-400', icon: <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" /> },
 }
 
 export default function BorrowerDashboard() {
@@ -50,8 +68,21 @@ export default function BorrowerDashboard() {
     const [result, setResult] = useState<UploadResponse | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [amountError, setAmountError] = useState<string | null>(null)
+    const [invoices, setInvoices] = useState<InvoiceRecord[]>([])
+    const [invoicesLoading, setInvoicesLoading] = useState(true)
     const { address } = useAccount()
     const { signMessageAsync } = useSignMessage()
+
+    useEffect(() => {
+        if (!address) { setInvoicesLoading(false); return }
+        setInvoicesLoading(true)
+        axios.get(`${BACKEND_URL}/api/v1/invoices`, {
+            params: { wallet: address.toLowerCase() }
+        })
+        .then(res => setInvoices(res.data?.data ?? []))
+        .catch(() => setInvoices([]))
+        .finally(() => setInvoicesLoading(false))
+    }, [address])
 
     function validateAmount(val: string): string | null {
         if (!val) return null
@@ -315,34 +346,47 @@ export default function BorrowerDashboard() {
                     <div className="space-y-6">
                         <Card>
                             <h3 className="font-bold text-lg mb-4 text-white">Recent Submissions</h3>
-                            <div className="space-y-4 text-sm">
-                                <div className="p-4 rounded-lg bg-mantle-darker border border-white/5 flex items-start gap-3">
-                                    <CheckCircle className="w-5 h-5 text-mantle-green shrink-0 mt-0.5" />
-                                    <div>
-                                        <div className="font-bold text-white">INV-2023-001 <span className="text-xs font-normal text-gray-400 ml-2">Awaiting Funding</span></div>
-                                        <div className="text-gray-400 mt-1">Value: $15,000</div>
-                                        <div className="w-full bg-white/5 h-1.5 rounded-full mt-3 overflow-hidden">
-                                            <div className="bg-mantle-green w-[45%] h-full" />
-                                        </div>
-                                        <div className="text-xs text-gray-500 mt-1">Funded 45% from Mantle Network pool</div>
-                                    </div>
+                            {invoicesLoading ? (
+                                <div className="text-sm text-gray-500 py-4 text-center">Loading...</div>
+                            ) : invoices.length === 0 ? (
+                                <div className="text-sm text-gray-500 py-4 text-center">
+                                    <Upload className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                                    No invoices yet — upload one to get started
                                 </div>
-
-                                <div className="p-4 rounded-lg bg-mantle-darker border border-white/5 flex items-start gap-3">
-                                    <AlertCircle className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
-                                    <div>
-                                        <div className="font-bold text-white">INV-2023-002 <span className="text-xs font-normal text-gray-400 ml-2">AI Verification</span></div>
-                                        <div className="text-gray-400 mt-1">Document is being analyzed by scoring machine...</div>
-                                    </div>
+                            ) : (
+                                <div className="space-y-3 text-sm max-h-[400px] overflow-y-auto">
+                                    {invoices.map((inv) => {
+                                        const s = STATUS_MAP[inv.status] ?? STATUS_MAP.pending
+                                        return (
+                                            <div key={inv._id} className="p-4 rounded-lg bg-mantle-darker border border-white/5 flex items-start gap-3">
+                                                {s.icon}
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="font-bold text-white truncate">
+                                                        {inv.tokenId ? `Invoice #${inv.tokenId}` : 'Pending...'}
+                                                        <span className={`text-xs font-normal ml-2 ${s.color}`}>{s.label}</span>
+                                                    </div>
+                                                    <div className="text-gray-400 mt-1">
+                                                        <DollarSign className="w-3 h-3 inline -ml-1" />{inv.amount.toLocaleString()}
+                                                        {inv.riskTier && (
+                                                            <span className="ml-2 text-xs uppercase text-gray-500">{inv.riskTier}</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-xs text-gray-600 mt-1">
+                                                        {new Date(inv.createdAt).toLocaleDateString()}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
                                 </div>
-                            </div>
+                            )}
                         </Card>
 
                         <Card className="bg-gradient-to-br from-mantle-dark to-[#002B19] border-mantle-green/30">
-                            <h3 className="font-bold text-white mb-2">Your Credit Limit</h3>
-                            <div className="text-3xl font-extrabold text-mantle-green mb-1">$50,000</div>
-                            <p className="text-xs text-gray-400 mb-4">Backed by on-chain reputation (Score: 850/A+)</p>
-                            <Button variant="outline" className="w-full text-xs" size="sm">Increase Limit</Button>
+                            <h3 className="font-bold text-white mb-2">Your Credit Profile</h3>
+                            <div className="text-sm text-gray-400 mb-4">
+                                Your borrowing limit will be computed after your first invoice is assessed by the AI engine.
+                            </div>
                         </Card>
                     </div>
                 </div>

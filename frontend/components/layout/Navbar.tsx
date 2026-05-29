@@ -36,8 +36,8 @@ export function Navbar() {
                 </Link>
 
                 <div className="hidden md:flex items-center gap-8">
-                    <Link href="/#how-it-works" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">How it Works</Link>
-                    <Link href="/#features" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Features</Link>
+                    <Link href="/" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Home</Link>
+                    <Link href="/borrower" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Borrow</Link>
                     <Link href="/investor" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Vaults</Link>
                 </div>
 
