@@ -51,6 +51,8 @@ describe("AgentController", function () {
     );
     await agentController.waitForDeployment();
 
+    await validationRegistry.authorizeRequester(await agentController.getAddress());
+    await reputationRegistry.authorizeSubmitter(await agentController.getAddress());
     const AGENT_ROLE = await vaultManager.AGENT_ROLE();
     await vaultManager.grantRole(AGENT_ROLE, await agentController.getAddress());
   });
@@ -104,7 +106,7 @@ describe("AgentController", function () {
         await vaultManager.getAddress(),
         ethers.parseUnits("100000", 6)
       );
-      await vaultManager.connect(owner).deposit(0, ethers.parseUnits("50000", 6));
+      await vaultManager.connect(owner).deposit(0, ethers.parseUnits("50000", 6), 0);
     });
 
     it("should accept proposal from agent signer", async function () {
@@ -216,7 +218,7 @@ describe("AgentController", function () {
         await vaultManager.getAddress(),
         ethers.parseUnits("10000", 6)
       );
-      await vaultManager.connect(investor).deposit(0, ethers.parseUnits("5000", 6));
+      await vaultManager.connect(investor).deposit(0, ethers.parseUnits("5000", 6), 0);
     });
 
     it("should execute a validated proposal", async function () {

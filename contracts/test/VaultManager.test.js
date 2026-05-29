@@ -70,7 +70,7 @@ describe("VaultManager", function () {
   describe("Deposits", function () {
     it("should accept deposits", async function () {
       const amount = ethers.parseUnits("1000", USDT_DECIMALS);
-      await vaultManager.connect(investor).deposit(0, amount);
+      await vaultManager.connect(investor).deposit(0, amount, 0);
 
       const vault = await vaultManager.vaults(0);
       expect(vault.totalDeposits).to.equal(amount);
@@ -83,28 +83,28 @@ describe("VaultManager", function () {
     it("should reject deposits below minimum", async function () {
       const amount = ethers.parseUnits("100", USDT_DECIMALS);
       await expect(
-        vaultManager.connect(investor).deposit(0, amount)
+        vaultManager.connect(investor).deposit(0, amount, 0)
       ).to.be.revertedWith("VM: below minimum deposit");
     });
 
     it("should reject deposits to inactive vault", async function () {
       await vaultManager.connect(owner).setVaultActive(0, false);
       await expect(
-        vaultManager.connect(investor).deposit(0, ethers.parseUnits("1000", USDT_DECIMALS))
+        vaultManager.connect(investor).deposit(0, ethers.parseUnits("1000", USDT_DECIMALS), 0)
       ).to.be.revertedWith("VM: vault not active");
     });
 
     it("should reject deposits when paused", async function () {
       await vaultManager.connect(owner).pause();
       await expect(
-        vaultManager.connect(investor).deposit(0, ethers.parseUnits("1000", USDT_DECIMALS))
+        vaultManager.connect(investor).deposit(0, ethers.parseUnits("1000", USDT_DECIMALS), 0)
       ).to.be.revertedWith("Pausable: paused");
     });
   });
 
   describe("Withdrawals", function () {
     beforeEach(async function () {
-      await vaultManager.connect(investor).deposit(0, ethers.parseUnits("2000", USDT_DECIMALS));
+      await vaultManager.connect(investor).deposit(0, ethers.parseUnits("2000", USDT_DECIMALS), 0);
     });
 
     it("should allow partial withdrawal", async function () {
@@ -146,7 +146,7 @@ describe("VaultManager", function () {
 
   describe("Rebalancing", function () {
     beforeEach(async function () {
-      await vaultManager.connect(investor).deposit(0, ethers.parseUnits("10000", USDT_DECIMALS));
+      await vaultManager.connect(investor).deposit(0, ethers.parseUnits("10000", USDT_DECIMALS), 0);
     });
 
     it("should allow agent to rebalance", async function () {
@@ -188,9 +188,9 @@ describe("VaultManager", function () {
 
   describe("Vault queries", function () {
     beforeEach(async function () {
-      await vaultManager.connect(investor).deposit(0, ethers.parseUnits("5000", USDT_DECIMALS));
-      await vaultManager.connect(investor).deposit(1, ethers.parseUnits("3000", USDT_DECIMALS));
-      await vaultManager.connect(investor).deposit(2, ethers.parseUnits("2000", USDT_DECIMALS));
+      await vaultManager.connect(investor).deposit(0, ethers.parseUnits("5000", USDT_DECIMALS), 0);
+      await vaultManager.connect(investor).deposit(1, ethers.parseUnits("3000", USDT_DECIMALS), 0);
+      await vaultManager.connect(investor).deposit(2, ethers.parseUnits("2000", USDT_DECIMALS), 0);
     });
 
     it("should return free liquidity", async function () {
