@@ -64,6 +64,12 @@ async function main() {
 
   const validatorAddress = deployer.address;
 
+  // Generate dedicated agent signer wallet if not provided
+  const agentSigner = process.env.AGENT_SIGNER_PRIVATE_KEY
+    ? new ethers.Wallet(process.env.AGENT_SIGNER_PRIVATE_KEY)
+    : ethers.Wallet.createRandom();
+  console.log("\nAgent Signer Wallet:", agentSigner.address);
+
   // 5. Deploy AgentController
   console.log("\nDeploying AgentController...");
   const AgentController = await ethers.getContractFactory("AgentController");
@@ -74,7 +80,7 @@ async function main() {
     vaultManagerAddress,
     riskEngineAddress,
     validatorAddress,
-    deployer.address
+    agentSigner.address
   );
   await agentController.waitForDeployment();
   const agentControllerAddress = await agentController.getAddress();
@@ -90,6 +96,13 @@ async function main() {
   const VALIDATOR_ROLE = await invoiceNFT.VALIDATOR_ROLE();
   await invoiceNFT.grantRole(VALIDATOR_ROLE, vaultManagerAddress);
   console.log("Granted VALIDATOR_ROLE to VaultManager");
+
+  // Authorize AgentController on ValidationRegistry and ReputationRegistry
+  await validationRegistry.authorizeRequester(agentControllerAddress);
+  console.log("Authorized AgentController on ValidationRegistry");
+
+  await reputationRegistry.authorizeSubmitter(agentControllerAddress);
+  console.log("Authorized AgentController on ReputationRegistry");
 
   const AGENT_ROLE = ethers.keccak256(ethers.toUtf8Bytes("AGENT_ROLE"));
   await vaultManager.grantRole(AGENT_ROLE, agentControllerAddress);
@@ -121,11 +134,14 @@ async function main() {
       usdt: USDT_ADDRESS
     },
     deployer: deployer.address,
+    agentSigner: agentSigner.address,
+    agentSignerPrivateKey: process.env.AGENT_SIGNER_PRIVATE_KEY ? "[provided]" : agentSigner.privateKey,
     nextSteps: [
       "For production: deploy real zkML/TEE validator",
       "Upload agent_registration.json to IPFS",
       "Update agent URI with IPFS CID",
-      "Verify all contracts on explorer"
+      "Verify all contracts on explorer",
+      "Fund the agent signer wallet with MNT for gas"
     ]
   };
 

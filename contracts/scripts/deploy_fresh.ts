@@ -86,7 +86,12 @@ async function main() {
   console.log("VaultManager:", vaultManagerAddress);
 
   const validatorAddress = deployer.address;
-  const agentSigner = deployer.address;
+
+  // Generate dedicated agent signer wallet if not provided
+  const agentSigner = process.env.AGENT_SIGNER_PRIVATE_KEY
+    ? new ethers.Wallet(process.env.AGENT_SIGNER_PRIVATE_KEY)
+    : ethers.Wallet.createRandom();
+  console.log("\nAgent Signer Wallet:", agentSigner.address);
 
   // 7. Deploy AgentController
   console.log("\nDeploying AgentController...");
@@ -121,14 +126,24 @@ async function main() {
   await tx.wait();
   console.log("Granted VALIDATOR_ROLE to VaultManager");
 
-  // 9. Grant AGENT_ROLE to AgentController on VaultManager
+  // 9. Authorize AgentController on ValidationRegistry and ReputationRegistry
+  console.log("\nConfiguring registry authorizations...");
+  tx = await validationRegistry.authorizeRequester(agentControllerAddress);
+  await tx.wait();
+  console.log("Authorized AgentController on ValidationRegistry");
+
+  tx = await reputationRegistry.authorizeSubmitter(agentControllerAddress);
+  await tx.wait();
+  console.log("Authorized AgentController on ReputationRegistry");
+
+  // 10. Grant AGENT_ROLE to AgentController on VaultManager
   console.log("\nGranting AGENT_ROLE to AgentController...");
   const AGENT_ROLE = ethers.keccak256(ethers.toUtf8Bytes("AGENT_ROLE"));
   tx = await vaultManager.grantRole(AGENT_ROLE, agentControllerAddress);
   await tx.wait();
   console.log("AGENT_ROLE granted to AgentController");
 
-  // 10. Register agent
+  // 11. Register agent
   console.log("\nRegistering agent...");
   const agentURI = "data:application/json," + JSON.stringify({
     name: "TILV Yield Optimizer",
@@ -141,7 +156,7 @@ async function main() {
   await tx.wait();
   console.log("Agent registered");
 
-  // 11. Save deployment info
+  // 12. Save deployment info
   const deploymentInfo = {
     network: network,
     deployedAt: new Date().toISOString(),
@@ -156,6 +171,15 @@ async function main() {
       usdt: USDT_ADDRESS
     },
     deployer: deployer.address,
+    agentSigner: agentSigner.address,
+    agentSignerPrivateKey: process.env.AGENT_SIGNER_PRIVATE_KEY ? "[provided]" : agentSigner.privateKey,
+    nextSteps: [
+      "For production: deploy real zkML/TEE validator",
+      "Upload agent_registration.json to IPFS",
+      "Update agent URI with IPFS CID",
+      "Verify all contracts on explorer",
+      "Fund the agent signer wallet with MNT for gas"
+    ]
   };
 
   console.log("\n" + "=".repeat(60));
@@ -179,7 +203,11 @@ async function main() {
   console.log(`REPUTATION_REGISTRY_ADDRESS=${reputationRegistryAddress}`);
   console.log(`VALIDATION_REGISTRY_ADDRESS=${validationRegistryAddress}`);
   console.log(`VALIDATOR_ADDRESS=${validatorAddress}`);
-  console.log(`AGENT_SIGNER_ADDRESS=${agentSigner}`);
+  console.log(`AGENT_SIGNER_ADDRESS=${agentSigner.address}`);
+  if (!process.env.AGENT_SIGNER_PRIVATE_KEY) {
+    console.log(`\n⚠️  AGENT_SIGNER_PRIVATE_KEY=${agentSigner.privateKey}`);
+    console.log("SAVE THIS PRIVATE KEY - it will not be shown again");
+  }
 }
 
 main()
