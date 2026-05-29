@@ -10,7 +10,7 @@ import FormData from 'form-data';
 import { connectMongoDB, connectRedis } from './config/database';
 import config, { validateConfig } from './config/index';
 import logger from './utils/logger';
-import { verifyWalletSignature } from './middleware/auth';
+import { verifyWalletSignature, authenticateJWT, AuthRequest } from './middleware/auth';
 import { validate, processInvoiceSchema } from './middleware/validate';
 import { verifyMimeType } from './middleware/mime';
 import { getMetrics, httpRequestDuration, activeConnections } from './services/metrics';
@@ -146,6 +146,7 @@ apiV1Router.get('/', (req: Request, res: Response) => {
 
 apiV1Router.post('/process-invoice',
     aiProxyLimiter,
+    verifyWalletSignature,
     upload.single('file'),
     verifyMimeType,
     validate(processInvoiceSchema),
@@ -226,6 +227,24 @@ apiV1Router.post('/auth/wallet', async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Authentication failed' });
     }
 });
+
+// Invoice history for authenticated user
+apiV1Router.get('/invoices',
+    authenticateJWT,
+    async (req: AuthRequest, res: Response) => {
+        try {
+            const { Invoice } = await import('./models/Invoice');
+            const invoices = await Invoice.find({ ownerAddress: req.user!.wallet })
+                .sort({ createdAt: -1 })
+                .limit(50)
+                .lean();
+            res.json({ success: true, data: invoices });
+        } catch (err) {
+            logger.error('Failed to fetch invoices:', err);
+            res.status(500).json({ error: 'Failed to fetch invoices' });
+        }
+    }
+);
 
 app.use('/api/v1', apiV1Router);
 
