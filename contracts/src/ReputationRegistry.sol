@@ -4,6 +4,8 @@ pragma solidity 0.8.20;
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract ReputationRegistry is Ownable {
+    mapping(address => bool) public authorizedSubmitters;
+
     struct Feedback {
         int128  value;
         uint8   valueDecimals;
@@ -27,7 +29,18 @@ contract ReputationRegistry is Ownable {
         address indexed submitter
     );
 
-    constructor() Ownable() {}
+    constructor() Ownable() {
+        authorizedSubmitters[msg.sender] = true;
+    }
+
+    function authorizeSubmitter(address submitter) external onlyOwner {
+        require(submitter != address(0), "RR: zero address");
+        authorizedSubmitters[submitter] = true;
+    }
+
+    function revokeSubmitter(address submitter) external onlyOwner {
+        authorizedSubmitters[submitter] = false;
+    }
 
     function giveFeedback(
         uint256 agentId,
@@ -39,6 +52,7 @@ contract ReputationRegistry is Ownable {
         string  calldata feedbackURI,
         bytes32 feedbackHash
     ) external {
+        require(authorizedSubmitters[msg.sender], "RR: not authorized");
         _agentFeedback[agentId].push(Feedback({
             value: value,
             valueDecimals: valueDecimals,

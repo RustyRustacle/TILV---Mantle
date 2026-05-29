@@ -122,7 +122,7 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
         });
     }
 
-    function deposit(VaultTier tier, uint256 amount) external nonReentrant whenNotPaused whenNotShutdown {
+    function deposit(VaultTier tier, uint256 amount, uint256 minShares) external nonReentrant whenNotPaused whenNotShutdown {
         Vault storage vault = vaults[tier];
         require(vault.isActive, "VM: vault not active");
         require(amount >= vault.minDeposit, "VM: below minimum deposit");
@@ -139,6 +139,8 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
         } else {
             shares = (amount * totalShares) / totalValue;
         }
+
+        require(shares >= minShares, "VM: slippage too high");
 
         pos.depositedAmount += amount;
         pos.shares += shares;
@@ -337,10 +339,10 @@ contract VaultManager is EmergencyPause, ReentrancyGuard {
 
     function getTotalValue(VaultTier tier) public view returns (uint256) {
         Vault memory v = vaults[tier];
-        uint256 assets = v.totalDeposits + v.totalReturns;
-        uint256 liabilities = v.totalAllocated + v.totalBadDebt;
-        if (assets <= liabilities) return 0;
-        return assets - liabilities;
+        uint256 netAssets = v.totalDeposits + v.totalReturns;
+        uint256 unrecoverable = v.totalBadDebt;
+        if (netAssets <= unrecoverable) return 0;
+        return netAssets - unrecoverable;
     }
 
     function getPosition(VaultTier tier, address investor) external view returns (InvestorPosition memory) {

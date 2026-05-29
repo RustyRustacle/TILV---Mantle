@@ -20,7 +20,7 @@ contract IdentityRegistry is ERC721, Ownable {
     function register(string calldata uri) external returns (uint256 agentId) {
         agentId = _nextTokenId;
         _nextTokenId++;
-        _mint(msg.sender, agentId);
+        _safeMint(msg.sender, agentId);
         _agentURIs[agentId] = uri;
         emit AgentRegistered(agentId, uri, msg.sender);
     }

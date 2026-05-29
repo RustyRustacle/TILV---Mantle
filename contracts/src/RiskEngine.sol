@@ -111,6 +111,13 @@ contract RiskEngine is Ownable {
         require(authorizedOracles[oracle], "Not authorized");
 
         authorizedOracles[oracle] = false;
+        for (uint256 i = 0; i < oracleList.length; i++) {
+            if (oracleList[i] == oracle) {
+                oracleList[i] = oracleList[oracleList.length - 1];
+                oracleList.pop();
+                break;
+            }
+        }
         emit OracleRevoked(oracle);
     }
 

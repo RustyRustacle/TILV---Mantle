@@ -3,6 +3,7 @@ pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
 interface IERC8004Identity {
     struct MetadataEntry {
@@ -82,7 +83,7 @@ interface IRiskEngine {
     function getAverageRiskScore(uint8 tier) external view returns (uint256);
 }
 
-contract AgentController is Ownable, ReentrancyGuard {
+contract AgentController is Ownable, ReentrancyGuard, IERC721Receiver {
 
     IERC8004Identity   public identityRegistry;
     IERC8004Reputation public reputationRegistry;
@@ -143,6 +144,10 @@ contract AgentController is Ownable, ReentrancyGuard {
     modifier onlyWhenNotShutdown() {
         require(!vaultManager.paused(), "AC: protocol shutdown");
         _;
+    }
+
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return IERC721Receiver.onERC721Received.selector;
     }
 
     modifier agentReady() {

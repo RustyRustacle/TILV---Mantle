@@ -4,6 +4,8 @@ pragma solidity 0.8.20;
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract ValidationRegistry is Ownable {
+    mapping(address => bool) public authorizedRequesters;
+
     struct ValidationRequest {
         address validatorAddress;
         uint256 agentId;
@@ -45,7 +47,18 @@ contract ValidationRegistry is Ownable {
     error NoResponse(bytes32 requestHash);
     error AlreadyResponded(bytes32 requestHash);
 
-    constructor() Ownable() {}
+    constructor() Ownable() {
+        authorizedRequesters[msg.sender] = true;
+    }
+
+    function authorizeRequester(address requester) external onlyOwner {
+        require(requester != address(0), "VR: zero address");
+        authorizedRequesters[requester] = true;
+    }
+
+    function revokeRequester(address requester) external onlyOwner {
+        authorizedRequesters[requester] = false;
+    }
 
     modifier onlyValidator(bytes32 requestHash) {
         if (msg.sender != _requests[requestHash].validatorAddress) {
@@ -60,6 +73,7 @@ contract ValidationRegistry is Ownable {
         string  calldata requestURI,
         bytes32 requestHash
     ) external {
+        require(authorizedRequesters[msg.sender], "VR: not authorized");
         _requests[requestHash] = ValidationRequest({
             validatorAddress: validatorAddress,
             agentId: agentId,
