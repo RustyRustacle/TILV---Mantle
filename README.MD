@@ -1,5 +1,7 @@
 # TILV - Tokenized Invoice Liquidity Vault
 
+![TILV Banner](public/tilv-banner.png)
+
 [![Built on Mantle](https://img.shields.io/badge/Built%20on-Mantle-black)](https://mantle.xyz)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -151,6 +153,11 @@ All critical functions are protected by:
 - Slippage protection on withdrawals
 - On-chain proposal hash verification
 - Wallet signature verification on AI engine
+
+## Collaborators
+
+- [@RustyRustacle](https://github.com/RustyRustacle)
+- [@aryahaikakusuma](https://github.com/aryahaikakusuma)
 
 ## License
 
