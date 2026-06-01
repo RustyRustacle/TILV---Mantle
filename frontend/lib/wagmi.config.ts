@@ -22,10 +22,10 @@ const chains: [Chain, ...Chain[]] = process.env.NEXT_PUBLIC_MAINNET === 'true'
 function getProjectId(): string {
   const id = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
   if (!id && typeof window !== 'undefined') {
-    console.warn('NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set')
-    return ''
+    console.warn('NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set; using RainbowKit demo project id for local development')
+    return 'YOUR_PROJECT_ID'
   }
-  return id ?? ''
+  return id || 'YOUR_PROJECT_ID'
 }
 
 export const config = getDefaultConfig({

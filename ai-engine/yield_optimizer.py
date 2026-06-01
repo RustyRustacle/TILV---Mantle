@@ -38,7 +38,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from web3 import Web3
-from web3.middleware import geth_poa_middleware
+from web3.middleware import ExtraDataToPOAMiddleware
 
 load_dotenv()
 logging.basicConfig(
@@ -206,7 +206,7 @@ class RebalanceProposal:
 # ── Web3 setup ─────────────────────────────────────────────────
 def build_w3() -> Web3:
     w3 = Web3(Web3.HTTPProvider(RPC_URL, request_kwargs={"timeout": 60}))
-    w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+    w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
     if not w3.is_connected():
         raise ConnectionError("Cannot connect to RPC")
     return w3

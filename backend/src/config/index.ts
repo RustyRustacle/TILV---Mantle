@@ -72,9 +72,12 @@ const config = {
 
 export const validateConfig = (): void => {
     const requiredEnvVars = [
-        { key: 'PRIVATE_KEY', value: config.mantle.privateKey },
         { key: 'JWT_SECRET', value: process.env.JWT_SECRET }
     ];
+
+    if (config.nodeEnv === 'production') {
+        requiredEnvVars.push({ key: 'PRIVATE_KEY', value: config.mantle.privateKey });
+    }
 
     const missing: string[] = [];
     requiredEnvVars.forEach(({ key, value }) => {

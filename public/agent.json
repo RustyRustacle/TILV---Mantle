@@ -31,7 +31,11 @@
       "name": "Mantle Mainnet",
       "chainId": 5000
     },
-    "vaultTiers": ["Prime", "Growth", "Emerging"],
+    "vaultTiers": [
+      "Prime",
+      "Growth",
+      "Emerging"
+    ],
     "strategy": "risk_adjusted_apy_optimisation",
     "rebalanceFrequency": "hourly",
     "safetyParams": {

@@ -48,15 +48,27 @@ const form_data_1 = __importDefault(require("form-data"));
 const database_1 = require("./config/database");
 const index_1 = __importStar(require("./config/index"));
 const logger_1 = __importDefault(require("./utils/logger"));
+const auth_1 = require("./middleware/auth");
+const validate_1 = require("./middleware/validate");
+const mime_1 = require("./middleware/mime");
+const metrics_1 = require("./services/metrics");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = index_1.default.port;
+// Rate limiters
 const apiLimiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000,
     max: 100,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many requests, please try again later.' }
+});
+const aiProxyLimiter = (0, express_rate_limit_1.default)({
+    windowMs: 60 * 60 * 1000,
+    max: 50,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Invoice submission rate limit exceeded. Max 50/hour.' }
 });
 const shutdownHandlers = [];
 process.on('unhandledRejection', (reason, promise) => {
@@ -100,6 +112,12 @@ app.use('/api/', apiLimiter);
 // Request logging middleware
 app.use((req, res, next) => {
     logger_1.default.info(`${req.method} ${req.originalUrl}`);
+    metrics_1.activeConnections.inc();
+    const end = metrics_1.httpRequestDuration.startTimer({ method: req.method, route: req.path });
+    res.on('finish', () => {
+        end({ status_code: res.statusCode });
+        metrics_1.activeConnections.dec();
+    });
     next();
 });
 // Health check endpoint
@@ -110,6 +128,11 @@ app.get('/health', (req, res) => {
         uptime: process.uptime(),
         service: 'TILV Backend API'
     });
+});
+// Metrics endpoint (Prometheus scrape)
+app.get('/metrics', async (req, res) => {
+    res.set('Content-Type', 'text/plain');
+    res.send(await (0, metrics_1.getMetrics)());
 });
 // Root endpoint
 app.get('/', (req, res) => {
@@ -122,7 +145,7 @@ app.get('/', (req, res) => {
         }
     });
 });
-// Multer config for file upload
+// Multer config
 const upload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
     limits: { fileSize: index_1.default.upload.maxFileSize },
@@ -144,8 +167,7 @@ apiV1Router.get('/', (req, res) => {
         version: '1.0.0'
     });
 });
-// Proxy invoice processing to AI engine
-apiV1Router.post('/process-invoice', upload.single('file'), async (req, res) => {
+apiV1Router.post('/process-invoice', aiProxyLimiter, auth_1.verifyWalletSignature, upload.single('file'), mime_1.verifyMimeType, (0, validate_1.validate)(validate_1.processInvoiceSchema), async (req, res) => {
     try {
         if (!req.file) {
             res.status(400).json({ error: 'No file provided' });
@@ -163,11 +185,16 @@ apiV1Router.post('/process-invoice', upload.single('file'), async (req, res) => 
         const headers = {
             ...form.getHeaders(),
         };
+        // Forward wallet auth headers
         const walletHeaders = ['x-wallet-address', 'x-wallet-signature', 'x-signed-message'];
         for (const h of walletHeaders) {
             const val = req.headers[h];
             if (val)
                 headers[h] = Array.isArray(val) ? val[0] : val;
+        }
+        // Add internal shared secret for backend→AI auth
+        if (index_1.default.ai.sharedSecret) {
+            headers['x-api-key'] = index_1.default.ai.sharedSecret;
         }
         const { data } = await axios_1.default.post(`${index_1.default.ai.serviceUrl}/process-invoice`, form, { headers, timeout: index_1.default.ai.timeout });
         res.json(data);
@@ -182,6 +209,45 @@ apiV1Router.post('/process-invoice', upload.single('file'), async (req, res) => 
         }
     }
 });
+// Auth routes (minimal for hackathon — generates JWT from wallet signature)
+apiV1Router.post('/auth/wallet', async (req, res) => {
+    try {
+        const { address, signature, message } = req.body;
+        if (!address || !signature || !message) {
+            res.status(400).json({ error: 'address, signature, and message required' });
+            return;
+        }
+        const ethers = await Promise.resolve().then(() => __importStar(require('ethers')));
+        const recovered = ethers.verifyMessage(message, signature);
+        if (recovered.toLowerCase() !== address.toLowerCase()) {
+            res.status(401).json({ error: 'Invalid signature' });
+            return;
+        }
+        const { default: jwt } = await Promise.resolve().then(() => __importStar(require('jsonwebtoken')));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const token = jwt.sign({ wallet: address.toLowerCase() }, index_1.default.jwt.secret, { expiresIn: index_1.default.jwt.expiresIn });
+        res.json({ token, wallet: address.toLowerCase() });
+    }
+    catch (err) {
+        logger_1.default.error('Auth error:', err);
+        res.status(500).json({ error: 'Authentication failed' });
+    }
+});
+// Invoice history for authenticated user
+apiV1Router.get('/invoices', auth_1.authenticateJWT, async (req, res) => {
+    try {
+        const { Invoice } = await Promise.resolve().then(() => __importStar(require('./models/Invoice')));
+        const invoices = await Invoice.find({ ownerAddress: req.user.wallet })
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .lean();
+        res.json({ success: true, data: invoices });
+    }
+    catch (err) {
+        logger_1.default.error('Failed to fetch invoices:', err);
+        res.status(500).json({ error: 'Failed to fetch invoices' });
+    }
+});
 app.use('/api/v1', apiV1Router);
 // 404 handler
 app.use('*', (req, res) => {
@@ -193,9 +259,15 @@ app.use('*', (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
     logger_1.default.error('Unhandled error:', err);
-    res.status(500).json({
-        error: 'Internal server error'
-    });
+    if (err instanceof multer_1.default.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            res.status(400).json({ error: 'File too large' });
+            return;
+        }
+        res.status(400).json({ error: err.message });
+        return;
+    }
+    res.status(500).json({ error: 'Internal server error' });
 });
 // Start server
 const startServer = async () => {
@@ -204,10 +276,10 @@ const startServer = async () => {
         await (0, database_1.connectMongoDB)();
         await (0, database_1.connectRedis)();
         const server = app.listen(PORT, () => {
-            logger_1.default.info(`🚀 Server running on port ${PORT}`);
-            logger_1.default.info(`📝 Environment: ${index_1.default.nodeEnv}`);
-            logger_1.default.info(`🌐 CORS origin: ${index_1.default.cors.origin}`);
-            logger_1.default.info(`⛓️  Mantle RPC: ${index_1.default.mantle.rpcUrl}`);
+            logger_1.default.info(`Server running on port ${PORT}`);
+            logger_1.default.info(`Environment: ${index_1.default.nodeEnv}`);
+            logger_1.default.info(`CORS origin: ${index_1.default.cors.origin}`);
+            logger_1.default.info(`Mantle RPC: ${index_1.default.mantle.rpcUrl}`);
         });
         shutdownHandlers.push(async () => {
             return new Promise((resolve) => {
@@ -229,6 +301,8 @@ const startServer = async () => {
         process.exit(1);
     }
 };
-startServer();
+if (require.main === module) {
+    startServer();
+}
 exports.default = app;
 //# sourceMappingURL=index.js.map

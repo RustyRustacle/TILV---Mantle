@@ -24,6 +24,7 @@ declare const config: {
     ai: {
         serviceUrl: string;
         timeout: number;
+        sharedSecret: string;
     };
     cors: {
         origin: string;

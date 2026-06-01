@@ -1,5 +1,7 @@
 # TILV - Tokenized Invoice Liquidity Vault
 
+![TILV Banner](public/tilv-banner.png)
+
 [![Built on Mantle](https://img.shields.io/badge/Built%20on-Mantle-black)](https://mantle.xyz)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -11,11 +13,14 @@ TILV transforms traditional invoice financing by leveraging blockchain technolog
 
 | Contract | Address |
 |----------|---------|
-| InvoiceNFT | `0x0D85acea4D717f1bd9B28e4383a431B10e45Bc3e` |
-| RiskEngine | `0x2B9B8E683C02355B531f5083696dea68637a53E9` |
-| VaultManager | `0x2e7af7131e1CF8109D35209C128377BFD93Ab553` |
-| AgentController | `0x7480Bce642B01B9078A9CB67E002f958De6E59bF` |
-| USDT | `0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9` |
+| InvoiceNFT | `0x504D3dcc9fe0dbD38f6EbC0509a09fb578dFa3A7` |
+| RiskEngine | `0x95768Da9D39E4D9E1B1E7C76F7091ceeb6404Ddd` |
+| VaultManager | `0x8FafC9dAc6342310fFd87497aCa9D405142EaA6D` |
+| AgentController | `0x42E1DDa459F2c38AdEefd82DA0C9cc1373bFdDBF` |
+| IdentityRegistry | `0xFa2786449B5020bCf2C8bdD7e458D9cCC76F1f1b` |
+| ReputationRegistry | `0xB8e763e71006fB2B5Bb7971f5766bB490F71F108` |
+| ValidationRegistry | `0x7E9cb695a519cf544F7b774857B630cBf2EF65d9` |
+| USDT | `0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE` |
 
 ## Key Features
 
@@ -73,9 +78,16 @@ npm run docker:up
 ```
 
 ### Access
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:3001
-- AI Engine: http://localhost:5000
+- HTTPS app via Caddy: https://localhost
+- Frontend direct port: http://localhost:3000
+- Backend API direct port: http://localhost:3001
+- AI Engine direct port: http://localhost:5000
+
+### Docker TLS
+
+Docker Compose includes a Caddy reverse proxy on ports 80 and 443. For local development, `CADDY_SITE_ADDRESS=localhost` uses Caddy's local TLS certificate, so your browser may ask you to trust the local certificate authority.
+
+For a public deployment, set `CADDY_SITE_ADDRESS` and `CORS_ORIGIN` to your HTTPS domain in `docker/.env`, point DNS at the server, and make sure ports 80 and 443 are reachable. Caddy will request and renew Let's Encrypt certificates automatically.
 
 ## Smart Contracts
 
@@ -141,6 +153,11 @@ All critical functions are protected by:
 - Slippage protection on withdrawals
 - On-chain proposal hash verification
 - Wallet signature verification on AI engine
+
+## Collaborators
+
+- [@RustyRustacle](https://github.com/RustyRustacle)
+- [@aryahaikakusuma](https://github.com/aryahaikakusuma)
 
 ## License
 

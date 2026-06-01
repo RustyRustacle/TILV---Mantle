@@ -11,8 +11,8 @@ async function main() {
   console.log("Balance:", ethers.formatEther(await ethers.provider.getBalance(deployer.address)), "MNT\n");
 
   // Existing contract addresses from .env
-  const vaultManagerAddress = process.env.VAULT_MANAGER_ADDRESS || "0xd917C2A5B9340876844c63a5b31E74d6Fb00956d";
-  const riskEngineAddress = process.env.RISK_ENGINE_ADDRESS || "0x7fad201FE34F0e0c55f44B75Ac482f76d77379DD";
+  const vaultManagerAddress = process.env.VAULT_MANAGER_ADDRESS || "0x8FafC9dAc6342310fFd87497aCa9D405142EaA6D";
+  const riskEngineAddress = process.env.RISK_ENGINE_ADDRESS || "0x95768Da9D39E4D9E1B1E7C76F7091ceeb6404Ddd";
 
   console.log("Existing VaultManager:", vaultManagerAddress);
   console.log("Existing RiskEngine:", riskEngineAddress);
@@ -82,7 +82,7 @@ async function main() {
 
   // 7. Grant MINTER_ROLE and VALIDATOR_ROLE on InvoiceNFT to VaultManager (if not already)
   console.log("\nChecking InvoiceNFT roles...");
-  const invoiceNFTAddress = process.env.INVOICE_NFT_ADDRESS || "0xC7af423cB2B4E7F1095a7229CB1cd765BD02711B";
+  const invoiceNFTAddress = process.env.INVOICE_NFT_ADDRESS || "0x504D3dcc9fe0dbD38f6EbC0509a09fb578dFa3A7";
   const invoiceNFT = await ethers.getContractAt("InvoiceNFT", invoiceNFTAddress);
   const MINTER_ROLE = await invoiceNFT.MINTER_ROLE();
   const VALIDATOR_ROLE = await invoiceNFT.VALIDATOR_ROLE();

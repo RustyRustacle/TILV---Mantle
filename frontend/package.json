@@ -22,6 +22,7 @@
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-hook-form": "^7.0.0",
+    "sharp": "^0.34.5",
     "tailwind-merge": "^3.5.0",
     "viem": "^2.48.7",
     "wagmi": "^2.19.5",
