@@ -11,15 +11,15 @@ const logger = winston_1.default.createLogger({
     }), winston_1.default.format.errors({ stack: true }), winston_1.default.format.splat(), winston_1.default.format.json()),
     defaultMeta: { service: 'tilv-backend' },
     transports: [
-        new winston_1.default.transports.File({ filename: 'logs/error.log', level: 'error' }),
-        new winston_1.default.transports.File({ filename: 'logs/combined.log' })
+        new winston_1.default.transports.Console({
+            format: winston_1.default.format.combine(winston_1.default.format.colorize(), winston_1.default.format.simple())
+        })
     ]
 });
-// If not production, log to console as well
-if (process.env.NODE_ENV !== 'production') {
-    logger.add(new winston_1.default.transports.Console({
-        format: winston_1.default.format.combine(winston_1.default.format.colorize(), winston_1.default.format.simple())
-    }));
+// Only write to files in non-Docker development
+if (process.env.NODE_ENV !== 'production' && !process.env.DOCKER) {
+    logger.add(new winston_1.default.transports.File({ filename: 'logs/error.log', level: 'error' }));
+    logger.add(new winston_1.default.transports.File({ filename: 'logs/combined.log' }));
 }
 exports.default = logger;
 //# sourceMappingURL=logger.js.map

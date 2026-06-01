@@ -31,11 +31,12 @@ describe('404 handler', () => {
 });
 
 describe('POST /api/v1/process-invoice (validation)', () => {
-  it('returns 400 when no file is sent', async () => {
+  it('requires wallet authentication before upload validation', async () => {
     const res = await request(app)
       .post('/api/v1/process-invoice')
       .field('amount', '1000');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
+    expect(res.body.error).toContain('Wallet authentication headers required');
   });
 });
 

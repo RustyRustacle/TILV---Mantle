@@ -53,7 +53,8 @@ const config = {
     // AI Service configuration
     ai: {
         serviceUrl: process.env.AI_SERVICE_URL || 'http://localhost:5000',
-        timeout: safeParseInt(process.env.AI_TIMEOUT, 60000)
+        timeout: safeParseInt(process.env.AI_TIMEOUT, 60000),
+        sharedSecret: process.env.AI_SHARED_SECRET || ''
     },
     // CORS configuration
     cors: {
@@ -68,9 +69,11 @@ const config = {
 };
 const validateConfig = () => {
     const requiredEnvVars = [
-        { key: 'PRIVATE_KEY', value: config.mantle.privateKey },
         { key: 'JWT_SECRET', value: process.env.JWT_SECRET }
     ];
+    if (config.nodeEnv === 'production') {
+        requiredEnvVars.push({ key: 'PRIVATE_KEY', value: config.mantle.privateKey });
+    }
     const missing = [];
     requiredEnvVars.forEach(({ key, value }) => {
         if (!value)

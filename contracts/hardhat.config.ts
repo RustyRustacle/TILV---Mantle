@@ -27,10 +27,11 @@ const config: HardhatUserConfig = {
     },
   },
   etherscan: {
-    apiKey: {
-      mantleTestnet: process.env.MANTLE_TESTNET_API_KEY || "abc",
-      mantleMainnet: process.env.MANTLE_MAINNET_API_KEY || "abc",
-    },
+    apiKey:
+      process.env.ETHERSCAN_API_KEY ||
+      process.env.MANTLE_MAINNET_API_KEY ||
+      process.env.MANTLE_TESTNET_API_KEY ||
+      "",
     customChains: [
       {
         network: "mantleTestnet",

@@ -13,10 +13,10 @@ async function main() {
   console.log("Deployer:", wallet.address);
   console.log("Balance:", ethers.formatEther(await provider.getBalance(wallet.address)), "MNT\n");
 
-  // Reuse existing mock registries
-  const identityRegistryAddress = "0xd1e1837A45c75a2e1Be2800f380950cCe373ad5a";
-  const reputationRegistryAddress = "0x4dE534158840Af1e8cFA1862F926F79FD772A519";
-  const validationRegistryAddress = "0xBA3530d53d2AabF2538Bf880dA4B8e74933567b6";
+  // Reuse the verified ERC-8004 registries.
+  const identityRegistryAddress = "0xFa2786449B5020bCf2C8bdD7e458D9cCC76F1f1b";
+  const reputationRegistryAddress = "0xB8e763e71006fB2B5Bb7971f5766bB490F71F108";
+  const validationRegistryAddress = "0x7E9cb695a519cf544F7b774857B630cBf2EF65d9";
 
   interface Artifact {
     abi: any[];

@@ -214,10 +214,10 @@ apiV1Router.post('/auth/wallet', async (req: Request, res: Response) => {
         }
 
         const { default: jwt } = await import('jsonwebtoken');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const token = jwt.sign(
             { wallet: address.toLowerCase() },
             config.jwt.secret,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             { expiresIn: config.jwt.expiresIn } as any
         );
 
@@ -306,6 +306,8 @@ const startServer = async () => {
     }
 };
 
-startServer();
+if (require.main === module) {
+    startServer();
+}
 
 export default app;
