@@ -1,5 +1,9 @@
 # TILV - Tokenized Invoice Liquidity Vault
 
+<p align="center">
+  <img src="frontend/public/banner.png" alt="TILV Banner" width="100%">
+</p>
+
 [![Built on Mantle](https://img.shields.io/badge/Built%20on-Mantle-black)](https://mantle.xyz)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
